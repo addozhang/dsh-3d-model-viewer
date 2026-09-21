@@ -10,7 +10,7 @@ Requirements (local machine only):
   - a dsh profile whose web bundle includes this plugin (default: `web`)
 
 Usage:  npm run test:e2e
-Env:    E2E_WORKSPACE (default 3d-diy), E2E_SESSION_SUBSTR (default empty = first)
+Env:    E2E_WORKSPACE (default dsh-3d-model-viewer), E2E_SESSION_SUBSTR (default empty = first)
 """
 import asyncio
 import base64
@@ -74,7 +74,7 @@ async def drive(port: int) -> int:
 
     authority = f"127.0.0.1:{port}"
     name, value = mint_cookie(authority)
-    workspace = os.environ.get("E2E_WORKSPACE", "3d-diy")
+    workspace = os.environ.get("E2E_WORKSPACE", "dsh-3d-model-viewer")
     session_substr = os.environ.get("E2E_SESSION_SUBSTR", "")
     failures: list[str] = []
 

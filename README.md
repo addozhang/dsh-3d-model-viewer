@@ -7,6 +7,8 @@ Models can be inspected directly in the sidebar document preview — no
 external tool needed — and the plugin doubles as a live preview drawer for
 active sessions.
 
+![3MF document-tab preview](docs/screenshot-doctab.webp)
+
 ## Features
 
 - **Native sidebar document preview** — clicking an `.stl` / `.3mf` in the

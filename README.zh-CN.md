@@ -4,6 +4,8 @@
 
 DeepSeek Harness Web GUI 的本地交互式 STL / 3MF 预览插件。模型可直接在侧边栏文档预览中查看，无需外部工具；同时为活动会话提供实时预览抽屉。
 
+![3MF 文档预览](docs/screenshot-doctab.webp)
+
 ## 功能
 
 - **侧边栏原生文档预览**：在「文件」面板点击 `.stl` / `.3mf`，右侧文档标签页像打开 Markdown / PDF / 图片一样打开 3D 视图（通过公开的 `documentPreviews` + `sidebar.right.tab.document` 扩展点接入）
