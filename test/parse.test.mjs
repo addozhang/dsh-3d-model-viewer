@@ -111,3 +111,11 @@ test("parseHexColor accepts spec 3MF color forms", () => {
   assert.equal(parseHexColor("#12"), null);
   assert.equal(parseHexColor(null), null);
 });
+
+test("ASCII STL is not misread as binary (offset-80 facet-count trap)", () => {
+  const bytes = readFileSync(new URL("../fixtures/ascii.stl", import.meta.url));
+  const mesh = parseStl(toArrayBuffer(bytes));
+  assert.equal(mesh.triangles, 12);
+  assert.ok(Math.abs(mesh.volume / 1000 - 0.61) < 0.01, `volume: ${mesh.volume}`);
+  assert.deepEqual(mesh.size.map(v => +v.toFixed(2)), [5.4, 12.6, 12.3]);
+});

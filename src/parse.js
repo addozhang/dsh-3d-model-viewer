@@ -82,7 +82,12 @@ function parseAsciiStl(buf) {
 export function parseStl(buf) {
   if (buf.byteLength >= 84) {
     const n = new DataView(buf).getUint32(80, true);
-    if (84 + n * 50 <= buf.byteLength) return parseBinaryStl(buf);
+    // Only trust binary when the facet count accounts for the whole file;
+    // ASCII bytes at offset 80 otherwise masquerade as a small facet count.
+    if (n > 0 && 84 + n * 50 === buf.byteLength) return parseBinaryStl(buf);
+    const head = new TextDecoder().decode(buf.slice(0, 512));
+    if (/^\s*solid/i.test(head) && /facet/i.test(head)) return parseAsciiStl(buf);
+    if (n > 0 && 84 + n * 50 <= buf.byteLength) return parseBinaryStl(buf);
   }
   return parseAsciiStl(buf);
 }
