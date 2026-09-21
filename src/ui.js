@@ -238,7 +238,11 @@ function sessionModels(all, text) {
 export function SessionBridge({ sessionId, sessions, stores, layoutStore }) {
   const sessionStore = stores.get(sessionId);
   const binding = sessions.binding(sessionId);
-  const window = React.useSyncExternalStore(binding.eventSource.subscribe, binding.eventSource.getSnapshot, binding.eventSource.getSnapshot);
+  // ObservableSnapshot methods are class methods: keep the receiver bound.
+  const window = React.useSyncExternalStore(
+    binding.eventSource.subscribe.bind(binding.eventSource),
+    () => binding.eventSource.getSnapshot(),
+    () => binding.eventSource.getSnapshot());
   const s = useStore(sessionStore);
   React.useEffect(() => {
     let live = true, timer;
