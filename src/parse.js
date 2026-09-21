@@ -134,17 +134,33 @@ async function unzip(buf) {
   return files;
 }
 
+/** Parse #rgb / #rrggbb / #rrggbbaa into [r,g,b] 0..1, or null. */
+export function parseHexColor(value) {
+  if (typeof value !== "string") return null;
+  const m = value.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})([0-9a-f]{2})?$/i);
+  if (!m) return null;
+  let hex = m[1];
+  if (hex.length === 3) hex = [...hex].map(c => c + c).join("");
+  return [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+}
+
 export async function parse3mf(buf) {
   const files = await unzip(buf);
   const models = files.filter(f => /\.model$/i.test(f.name));
   if (!models.length) throw Error("3MF 中没有 .model 网格");
-  const vals = [];
-  let triangles = 0;
+  const vals = [], cols = [];
+  let triangles = 0, sawColor = false;
   for (const f of models) {
     const doc = new DOMParser().parseFromString(new TextDecoder().decode(f.data), "application/xml");
     if (doc.querySelector("parsererror")) continue;
     const factor = ({ micron: .001, millimeter: 1, centimeter: 10, inch: 25.4, foot: 304.8, meter: 1000 }[doc.documentElement.getAttribute("unit")] || 1);
-    for (const mesh of doc.getElementsByTagNameNS("*", "mesh")) {
+    // basematerials resources: id -> [hexColor strings]
+    const materialMap = {};
+    for (const bm of doc.getElementsByTagNameNS("*", "basematerials")) {
+      materialMap[bm.getAttribute("id")] = [...bm.getElementsByTagNameNS("*", "base")]
+        .map(base => parseHexColor(base.getAttribute("color")));
+    }
+    const emit = (mesh, defaultColor, materialColors) => {
       const verts = [...mesh.getElementsByTagNameNS("*", "vertex")].map(v => [+v.getAttribute("x") * factor, +v.getAttribute("y") * factor, +v.getAttribute("z") * factor]);
       for (const t of mesh.getElementsByTagNameNS("*", "triangle")) {
         const ids = [+t.getAttribute("v1"), +t.getAttribute("v2"), +t.getAttribute("v3")];
@@ -153,11 +169,28 @@ export async function parse3mf(buf) {
         const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
         const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz) || 1;
         for (const v of [a, b, c]) vals.push(v[0], v[1], v[2], nx / l, ny / l, nz / l);
+        let color = defaultColor;
+        const matid = t.getAttribute("matid");
+        if (materialColors && matid !== null && materialColors[+matid - 1]) color = materialColors[+matid - 1];
+        if (color) sawColor = true;
+        if (color) cols.push(color[0], color[1], color[2], color[0], color[1], color[2], color[0], color[1], color[2]);
+        else cols.push(0, 0, 0, 0, 0, 0, 0, 0, 0);
         triangles++;
         if (triangles > 5000000) throw Error("模型超过 500 万三角面限制");
       }
+    };
+    // meshes grouped under objects (carrying pid/pindex material references)
+    const objects = [...doc.getElementsByTagNameNS("*", "object")];
+    for (const obj of objects) {
+      const materialColors = materialMap[obj.getAttribute("pid")] || null;
+      const objColor = materialColors ? materialColors[+(obj.getAttribute("pindex") || 0)] || null : null;
+      for (const mesh of obj.getElementsByTagNameNS("*", "mesh")) emit(mesh, objColor, materialColors);
     }
+    // bare meshes outside any object
+    if (!objects.length) for (const mesh of doc.getElementsByTagNameNS("*", "mesh")) emit(mesh, null, null);
   }
   if (!triangles) throw Error("3MF 中没有可显示的三角网格");
-  return finishMesh(new Float32Array(vals), triangles);
+  const mesh = finishMesh(new Float32Array(vals), triangles);
+  if (sawColor) mesh.colors = new Float32Array(cols);
+  return mesh;
 }

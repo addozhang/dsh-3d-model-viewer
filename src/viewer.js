@@ -4,8 +4,8 @@
 // keyboard shortcuts, and PNG screenshot export.
 import { React, h } from "./core.js";
 
-export const VS = `attribute vec3 p;attribute vec3 n;uniform mat4 mvp;uniform mat4 model;varying vec3 vn;void main(){gl_Position=mvp*vec4(p,1.);vn=mat3(model)*n;}`;
-export const FS = `precision mediump float;varying vec3 vn;uniform vec3 uColor;void main(){vec3 N=normalize(vn);vec3 L=normalize(vec3(.5,.8,1.));float d=max(dot(N,L),0.);float rim=pow(1.-abs(N.z),2.);vec3 c=uColor*(.28+.72*d)+rim*vec3(.08,.18,.28);gl_FragColor=vec4(c,1.);}`;
+export const VS = `attribute vec3 p;attribute vec3 n;attribute vec3 col;uniform mat4 mvp;uniform mat4 model;varying vec3 vn;varying vec3 vc;void main(){gl_Position=mvp*vec4(p,1.);vn=mat3(model)*n;vc=col;}`;
+export const FS = `precision mediump float;varying vec3 vn;varying vec3 vc;uniform vec3 uColor;uniform float uUseVColor;void main(){vec3 N=normalize(vn);vec3 L=normalize(vec3(.5,.8,1.));float d=max(dot(N,L),0.);float rim=pow(1.-abs(N.z),2.);vec3 base=mix(uColor,vc,uUseVColor);vec3 c=base*(.28+.72*d)+rim*vec3(.08,.18,.28);gl_FragColor=vec4(c,1.);}`;
 
 export const DEFAULT_COLOR = [.18, .62, .95];
 export const COLOR_PRESETS = [["蓝", [.18, .62, .95]], ["橙", [.95, .55, .18]], ["绿", [.25, .7, .4]], ["红", [.9, .3, .3]], ["紫", [.6, .4, .9]], ["灰", [.62, .65, .68]], ["白", [.93, .94, .96]]];
@@ -188,7 +188,7 @@ export function Viewer({ mesh, resetToken, view, color }) {
     if (!canvas || !mesh) return;
     const gl = canvas.getContext("webgl", { antialias: true, alpha: true });
     if (!gl) return;
-    let program, buff, raf = 0, down = false, mode = "rotate", lx = 0, ly = 0, zoom = 5.5, shotPending = false;
+    let program, buff, colBuff = null, raf = 0, down = false, mode = "rotate", lx = 0, ly = 0, zoom = 5.5, shotPending = false;
     let lastModel = null;
     pan.current = [0, 0];
     // Dimension label overlay lives next to the canvas inside the stage.
@@ -213,11 +213,18 @@ export function Viewer({ mesh, resetToken, view, color }) {
       buff = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buff);
       gl.bufferData(gl.ARRAY_BUFFER, mesh.data, gl.STATIC_DRAW);
-      const ps = gl.getAttribLocation(program, "p"), ns = gl.getAttribLocation(program, "n");
+      const ps = gl.getAttribLocation(program, "p"), ns = gl.getAttribLocation(program, "n"), cs = gl.getAttribLocation(program, "col");
       gl.enableVertexAttribArray(ps);
       gl.vertexAttribPointer(ps, 3, gl.FLOAT, false, 24, 0);
       gl.enableVertexAttribArray(ns);
       gl.vertexAttribPointer(ns, 3, gl.FLOAT, false, 24, 12);
+      if (mesh.colors) {
+        colBuff = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colBuff);
+        gl.bufferData(gl.ARRAY_BUFFER, mesh.colors, gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(cs);
+        gl.vertexAttribPointer(cs, 3, gl.FLOAT, false, 12, 0);
+      }
     } catch (e) { console.error(e); return; }
 
     const savePng = () => {
@@ -254,6 +261,7 @@ export function Viewer({ mesh, resetToken, view, color }) {
       gl.useProgram(program);
       const col = colorRef.current || DEFAULT_COLOR;
       gl.uniform3f(gl.getUniformLocation(program, "uColor"), col[0], col[1], col[2]);
+      gl.uniform1f(gl.getUniformLocation(program, "uUseVColor"), mesh.colors ? 1 : 0);
       gl.uniformMatrix4fv(gl.getUniformLocation(program, "model"), false, model);
       const mvp = mul(proj, model);
       gl.uniformMatrix4fv(gl.getUniformLocation(program, "mvp"), false, mvp);
@@ -367,6 +375,7 @@ export function Viewer({ mesh, resetToken, view, color }) {
       canvas.removeEventListener("keydown", key);
       window.removeEventListener(SCREENSHOT_EVENT, shot);
       if (buff) gl.deleteBuffer(buff);
+      if (colBuff) gl.deleteBuffer(colBuff);
       if (program) gl.deleteProgram(program);
     };
   }, [mesh, resetToken]);

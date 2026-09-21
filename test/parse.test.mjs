@@ -1,7 +1,7 @@
 // Unit tests for the pure parsing / geometry math.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { meshVolume, parseStl, toArrayBuffer } from "../src/parse.js";
+import { meshVolume, parseStl, toArrayBuffer, parseHexColor } from "../src/parse.js";
 import { hexCss, rgbCss, sameColor, VIEW_PRESETS, PRINTER_PROFILES, rayMesh, orthoHalfSize } from "../src/viewer.js";
 import { readFileSync } from "node:fs";
 
@@ -100,4 +100,14 @@ test("orthographic zoom maps wheel distance to view half-height", () => {
   assert.equal(orthoHalfSize(11), 2.3);             // zoom out halves the model size
   assert.ok(orthoHalfSize(1.2) < orthoHalfSize(5.5));
   assert.ok(orthoHalfSize(20) > orthoHalfSize(11));
+});
+
+test("parseHexColor accepts spec 3MF color forms", () => {
+  assert.deepEqual(parseHexColor("#ff0000"), [1, 0, 0]);
+  assert.deepEqual(parseHexColor("#00ff00"), [0, 1, 0]);
+  assert.deepEqual(parseHexColor("#f00"), [1, 0, 0]);
+  assert.deepEqual(parseHexColor("#ff0000aa"), [1, 0, 0]);
+  assert.equal(parseHexColor("red"), null);
+  assert.equal(parseHexColor("#12"), null);
+  assert.equal(parseHexColor(null), null);
 });
