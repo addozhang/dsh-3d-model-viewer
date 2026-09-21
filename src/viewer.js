@@ -1,6 +1,7 @@
-// WebGL viewer: flat-shaded mesh with orbit interaction, view presets
-// (axis views use an orthographic camera and bbox dimension labels), and a
-// model color input.
+// WebGL viewer: flat-shaded mesh with true trackball rotation (drag on the
+// model), canvas panning (drag on the background), view presets (axis views
+// use an orthographic camera and bbox dimension labels), model color input,
+// keyboard shortcuts, and PNG screenshot export.
 import { React, h } from "./core.js";
 
 export const VS = `attribute vec3 p;attribute vec3 n;uniform mat4 mvp;uniform mat4 model;varying vec3 vn;void main(){gl_Position=mvp*vec4(p,1.);vn=mat3(model)*n;}`;
@@ -38,6 +39,8 @@ export const rgbCss = (c) => `rgb(${Math.round(c[0] * 255)},${Math.round(c[1] * 
 export const hexCss = (c) => "#" + c.map(v => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, "0")).join("");
 export const sameColor = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === 3 && a.every((v, i) => Math.abs(v - b[i]) < 1e-3);
 
+export const SCREENSHOT_EVENT = "dsh-3d-model-shot";
+
 function shader(gl, type, src) {
   const s = gl.createShader(type);
   gl.shaderSource(s, src);
@@ -54,6 +57,9 @@ const mul = (a, b) => {
 };
 const rx = a => new Float32Array([1, 0, 0, 0, 0, Math.cos(a), Math.sin(a), 0, 0, -Math.sin(a), Math.cos(a), 0, 0, 0, 0, 1]);
 const ry = a => new Float32Array([Math.cos(a), 0, -Math.sin(a), 0, 0, 1, 0, 0, Math.sin(a), 0, Math.cos(a), 0, 0, 0, 0, 1]);
+const IDENTITY = () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+const buildRot = (yaw, pitch) => mul(ry(yaw), rx(pitch));
+const DEFAULT_ROT = () => buildRot(.65, -.45);
 
 function perspective(aspect) {
   const f = 1 / Math.tan(Math.PI / 8), near = .01, far = 100;
@@ -75,14 +81,62 @@ function projectPoint(mvp, p, w, hh) {
   return [(cx / cw * 0.5 + 0.5) * w, (0.5 - cy / cw * 0.5) * hh];
 }
 
+/** Slab-test a ray against the model-space AABB. */
+export function rayBox(o, d, lo, hi) {
+  let tmin = 0, tmax = Infinity;
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(d[i]) < 1e-12) {
+      if (o[i] < lo[i] || o[i] > hi[i]) return false;
+    } else {
+      let t1 = (lo[i] - o[i]) / d[i], t2 = (hi[i] - o[i]) / d[i];
+      if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+      tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+      if (tmin > tmax) return false;
+    }
+  }
+  return true;
+}
+
+/** Möller–Trumbore over the position stream (6-float vertex stride). */
+export function rayMesh(o, d, mesh, limitTriangles = 400000) {
+  if (!rayBox(o, d, mesh.lo, mesh.hi)) return false;
+  if (mesh.triangles > limitTriangles) return true; // bbox is close enough for huge meshes
+  const data = mesh.data;
+  for (let i = 0; i < data.length; i += 18) {
+    const ax = data[i], ay = data[i + 1], az = data[i + 2];
+    const bx = data[i + 6], by = data[i + 7], bz = data[i + 8];
+    const cx = data[i + 12], cy = data[i + 13], cz = data[i + 14];
+    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
+    const px = d[1] * e2z - d[2] * e2y, py = d[2] * e2x - d[0] * e2z, pz = d[0] * e2y - d[1] * e2x;
+    const det = e1x * px + e1y * py + e1z * pz;
+    if (det > -1e-10 && det < 1e-10) continue;
+    const inv = 1 / det;
+    const tx = o[0] - ax, ty = o[1] - ay, tz = o[2] - az;
+    const u = (tx * px + ty * py + tz * pz) * inv;
+    if (u < 0 || u > 1) continue;
+    const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+    const v = (d[0] * qx + d[1] * qy + d[2] * qz) * inv;
+    if (v < 0 || u + v > 1) continue;
+    return true;
+  }
+  return false;
+}
+
 export function ViewPresetBar({ onPick, color, onPickColor }) {
   return h("div", { className: "d3v-viewtools", "data-dsh-3d-views": "" },
-    h("div", { className: "d3v-views" }, VIEW_PRESETS.map(([k, label, ang]) =>
+    h("div", { className: "d3v-views" },
+      VIEW_PRESETS.map(([k, label, ang]) =>
+        h("button", {
+          key: k, type: "button", className: "d3v-view-btn", title: `${label}（${ang[2] ? "正交" : "透视"}，快捷键 ${VIEW_PRESETS.findIndex(p => p[0] === k) + 1}）`,
+          onPointerDown: e => e.stopPropagation(),
+          onClick: () => onPick(ang[0], ang[1], ang[2]),
+        }, label)),
       h("button", {
-        key: k, type: "button", className: "d3v-view-btn", title: label + (ang[2] ? "（正交）" : ""),
+        type: "button", className: "d3v-view-btn", title: "导出当前视图为 PNG",
         onPointerDown: e => e.stopPropagation(),
-        onClick: () => onPick(ang[0], ang[1], ang[2]),
-      }, label))),
+        onClick: () => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(SCREENSHOT_EVENT)); },
+      }, "截图")),
     onPickColor && h("div", { className: "d3v-colors" },
       COLOR_PRESETS.map(([label, c]) =>
         h("button", {
@@ -108,13 +162,15 @@ const DIM_ANCHORS = (lo, hi, margin) => ([
 
 export function Viewer({ mesh, resetToken, view, color }) {
   const ref = React.useRef(null);
-  const orient = React.useRef({ yaw: .65, pitch: -.45, ortho: false });
+  const orient = React.useRef({ rot: DEFAULT_ROT(), ortho: false });
+  const pan = React.useRef([0, 0]);
   const redraw = React.useRef(() => {});
   const colorRef = React.useRef(null);
 
   React.useEffect(() => {
     if (!view) return;
-    orient.current = { yaw: view.yaw, pitch: view.pitch, ortho: !!view.ortho };
+    orient.current = { rot: buildRot(view.yaw, view.pitch), ortho: !!view.ortho };
+    pan.current = [0, 0];
     redraw.current();
   }, [view]);
 
@@ -129,7 +185,9 @@ export function Viewer({ mesh, resetToken, view, color }) {
     if (!canvas || !mesh) return;
     const gl = canvas.getContext("webgl", { antialias: true, alpha: true });
     if (!gl) return;
-    let program, buff, raf = 0, down = false, lx = 0, ly = 0, zoom = 5.5;
+    let program, buff, raf = 0, down = false, mode = "rotate", lx = 0, ly = 0, zoom = 5.5, shotPending = false;
+    let lastModel = null;
+    pan.current = [0, 0];
     // Dimension label overlay lives next to the canvas inside the stage.
     const host = canvas.parentElement;
     const labelsBox = document.createElement("div");
@@ -159,9 +217,20 @@ export function Viewer({ mesh, resetToken, view, color }) {
       gl.vertexAttribPointer(ns, 3, gl.FLOAT, false, 24, 12);
     } catch (e) { console.error(e); return; }
 
+    const savePng = () => {
+      canvas.toBlob(blob => {
+        if (!blob) return;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${mesh.name || "model"}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "")}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      });
+    };
+
     const draw = () => {
       raf = 0;
-      const o = orient.current, { yaw, pitch } = o;
+      const o = orient.current, rot = o.rot;
       const d = Math.min(devicePixelRatio || 1, 2);
       const w = Math.max(1, Math.round(canvas.clientWidth * d)), hh = Math.max(1, Math.round(canvas.clientHeight * d));
       if (canvas.width !== w || canvas.height !== hh) { canvas.width = w; canvas.height = hh; }
@@ -173,12 +242,12 @@ export function Viewer({ mesh, resetToken, view, color }) {
       const aspect = w / hh;
       const proj = o.ortho ? orthographic(aspect) : perspective(aspect);
       const scale = 1 / mesh.radius;
-      const rot = mul(ry(yaw), rx(pitch));
       const model = new Float32Array(rot);
       for (const idx of [0, 1, 2, 4, 5, 6, 8, 9, 10]) model[idx] *= scale;
-      model[12] = -(model[0] * mesh.center[0] + model[4] * mesh.center[1] + model[8] * mesh.center[2]);
-      model[13] = -(model[1] * mesh.center[0] + model[5] * mesh.center[1] + model[9] * mesh.center[2]);
+      model[12] = -(model[0] * mesh.center[0] + model[4] * mesh.center[1] + model[8] * mesh.center[2]) + pan.current[0];
+      model[13] = -(model[1] * mesh.center[0] + model[5] * mesh.center[1] + model[9] * mesh.center[2]) + pan.current[1];
       model[14] = -(model[2] * mesh.center[0] + model[6] * mesh.center[1] + model[10] * mesh.center[2]) - zoom;
+      lastModel = model;
       gl.useProgram(program);
       const col = colorRef.current || DEFAULT_COLOR;
       gl.uniform3f(gl.getUniformLocation(program, "uColor"), col[0], col[1], col[2]);
@@ -209,27 +278,94 @@ export function Viewer({ mesh, resetToken, view, color }) {
       } else {
         for (const el of Object.values(labelEls)) el.style.display = "none";
       }
+      if (shotPending) { shotPending = false; savePng(); }
     };
     const request = () => { if (!raf) raf = requestAnimationFrame(draw); };
     redraw.current = request;
 
-    const pd = e => { down = true; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); };
+    /** View-space pointer ray mapped into model space via inverse(model). */
+    const pointerRay = e => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0 || !lastModel) return null;
+      const M = lastModel;
+      const px = (e.clientX - rect.left) / rect.width, py = (e.clientY - rect.top) / rect.height;
+      let o, d;
+      if (orient.current.ortho) {
+        const k = 1.15, aspect = rect.width / rect.height;
+        o = [(px * 2 - 1) * k * aspect, 1 - py * 2, 0]; d = [0, 0, -1];
+      } else {
+        const t = Math.tan(Math.PI / 8), aspect = rect.width / rect.height;
+        const dx = (px * 2 - 1) * t * aspect, dy = 1 - py * 2, dz = -1;
+        const f = 1 / Math.hypot(dx, dy, 1);
+        o = [0, 0, 0]; d = [dx * f, dy * f, dz * f];
+      }
+      const sigma = Math.hypot(M[0], M[1], M[2]) || 1;
+      const q = [(o[0] - M[12]) / sigma, (o[1] - M[13]) / sigma, (o[2] - M[14]) / sigma];
+      const dq = [d[0] / sigma, d[1] / sigma, d[2] / sigma];
+      return [
+        [M[0] * q[0] + M[4] * q[1] + M[8] * q[2], M[1] * q[0] + M[5] * q[1] + M[9] * q[2], M[2] * q[0] + M[6] * q[1] + M[10] * q[2]],
+        [M[0] * dq[0] + M[4] * dq[1] + M[8] * dq[2], M[1] * dq[0] + M[5] * dq[1] + M[9] * dq[2], M[2] * dq[0] + M[6] * dq[1] + M[10] * dq[2]],
+      ];
+    };
+
+    const panScale = () => {
+      const rect = canvas.getBoundingClientRect();
+      const hpx = rect.height || 1;
+      return orient.current.ortho ? 2 * 1.15 / hpx : 2 * Math.tan(Math.PI / 8) * zoom / hpx;
+    };
+
+    const pd = e => {
+      down = true; lx = e.clientX; ly = e.clientY;
+      const ray = pointerRay(e);
+      mode = ray && rayMesh(ray[0], ray[1], mesh) ? "rotate" : "pan";
+      canvas.style.cursor = mode === "rotate" ? "grabbing" : "move";
+      canvas.setPointerCapture(e.pointerId);
+    };
     const pm = e => {
       if (!down) return;
-      const o = orient.current;
-      o.yaw += (e.clientX - lx) * .01;
-      o.pitch = Math.max(-1.5, Math.min(1.5, o.pitch + (e.clientY - ly) * .01));
-      o.ortho = false;  // manual rotation leaves the measuring views
+      const dx = e.clientX - lx, dy = e.clientY - ly;
       lx = e.clientX; ly = e.clientY;
+      if (mode === "rotate") {
+        // screen-space incremental rotation: true trackball, no gimbal limits
+        const k = .01;
+        orient.current.rot = mul(ry(dx * k), mul(rx(dy * k), orient.current.rot));
+        orient.current.ortho = false;  // manual rotation leaves the measuring views
+      } else {
+        const s = panScale();
+        pan.current[0] += dx * s;
+        pan.current[1] -= dy * s;
+      }
       request();
     };
-    const pu = () => { down = false; };
+    const pu = () => { down = false; canvas.style.cursor = ""; };
     const wh = e => { e.preventDefault(); zoom = Math.max(1.2, Math.min(20, zoom * Math.exp(e.deltaY * .001))); request(); };
+    const applyPreset = ([, , [yaw, pitch, ortho]]) => {
+      orient.current = { rot: buildRot(yaw, pitch), ortho };
+      pan.current = [0, 0];
+      request();
+    };
+    const reset = () => {
+      orient.current = { rot: DEFAULT_ROT(), ortho: false };
+      pan.current = [0, 0];
+      request();
+    };
+    const key = e => {
+      const idx = parseInt(e.key, 10);
+      if (idx >= 1 && idx <= VIEW_PRESETS.length) { e.preventDefault(); applyPreset(VIEW_PRESETS[idx - 1]); }
+      else if (e.key === "r" || e.key === "R") { e.preventDefault(); reset(); }
+    };
+    const shot = () => {
+      if (canvas.clientWidth === 0) return;  // only the visible viewer answers
+      shotPending = true;
+      request();
+    };
     canvas.addEventListener("pointerdown", pd);
     canvas.addEventListener("pointermove", pm);
     canvas.addEventListener("pointerup", pu);
     canvas.addEventListener("pointercancel", pu);
     canvas.addEventListener("wheel", wh, { passive: false });
+    canvas.addEventListener("keydown", key);
+    window.addEventListener(SCREENSHOT_EVENT, shot);
     const ro = new ResizeObserver(request);
     ro.observe(canvas);
     request();
@@ -243,9 +379,16 @@ export function Viewer({ mesh, resetToken, view, color }) {
       canvas.removeEventListener("pointerup", pu);
       canvas.removeEventListener("pointercancel", pu);
       canvas.removeEventListener("wheel", wh);
+      canvas.removeEventListener("keydown", key);
+      window.removeEventListener(SCREENSHOT_EVENT, shot);
       if (buff) gl.deleteBuffer(buff);
       if (program) gl.deleteProgram(program);
     };
   }, [mesh, resetToken]);
-  return h("canvas", { ref, className: "d3v-canvas", "data-dsh-3d-canvas": "" });
+  return h("canvas", {
+    ref, className: "d3v-canvas", "data-dsh-3d-canvas": "",
+    tabIndex: 0, role: "img", "aria-label": "3D 模型视图：拖动模型旋转，拖动背景平移，滚轮缩放",
+    onKeyDown: e => e.stopPropagation(),
+    style: { outline: "none" },
+  });
 }

@@ -104,7 +104,7 @@ test("document body parses bytes and offers tools + print insights", async () =>
   const tools = barHost.type(barHost.props);
   const viewsRow = tools.children.find(c => c?.props?.className === "d3v-views");
   const labels = viewsRow.children.map(b => b.children[0]);
-  assert.deepEqual(labels, ["前", "后", "左", "右", "顶", "底", "等轴测"]);
+  assert.deepEqual(labels, ["前", "后", "左", "右", "顶", "底", "等轴测", "截图"]);
   const topBtn = viewsRow.children.find(b => b.children[0] === "顶");
   topBtn.props.onClick();
   await new Promise(r => setTimeout(r, 10));

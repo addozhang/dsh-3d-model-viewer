@@ -52,7 +52,7 @@ export function Model3dBody({ content, resourceAddress, t }) {
     let live = true;
     setState({ status: "loading" });
     Promise.resolve().then(() => { const buf = toArrayBuffer(bytes); return is3mf ? parse3mf(buf) : parseStl(buf); })
-      .then(mesh => { if (live) setState({ status: "ready", mesh }); })
+      .then(mesh => { mesh.name = name; if (live) setState({ status: "ready", mesh }); })
       .catch(e => { if (live) setState({ status: "error", message: e instanceof Error ? e.message : String(e) }); });
     return () => { live = false; };
   }, [bytes, is3mf]);
@@ -66,7 +66,7 @@ export function Model3dBody({ content, resourceAddress, t }) {
       h("div", { className: "d3v-doc-stats" },
         `${name} · ${state.mesh.triangles.toLocaleString()} △ · ${state.mesh.size.map(v => v.toFixed(1)).join(" × ")} mm`),
       h(PrintInsights, { mesh: state.mesh })),
-    state.status === "ready" && h("div", { className: "d3v-help" }, "拖动旋转 · 滚轮缩放 · 正交视图显示尺寸"));
+    state.status === "ready" && h("div", { className: "d3v-help" }, "拖动模型旋转 · 拖动背景平移 · 滚轮缩放 · 1-7 视角 R 复位"));
 }
 
 async function readWorkspaceModel(path) {
@@ -122,7 +122,7 @@ export function Overlay({ store }) {
             h("div", null, s.loading ? "正在解析模型…" : "将 STL / 3MF 拖到这里"),
             h("div", { className: "d3v-empty-note" }, "或点击右上角“打开文件”"))),
         s.error && h("div", { className: "d3v-error" }, s.error),
-        s.mesh && h("div", { className: "d3v-help" }, "拖动旋转 · 滚轮缩放 · 正交视图显示尺寸")),
+        s.mesh && h("div", { className: "d3v-help" }, "拖动模型旋转 · 拖动背景平移 · 滚轮缩放 · 1-7 视角 R 复位")),
       h("footer", { className: "d3v-footer" },
         s.mesh ? h(React.Fragment, null,
           h("span", { className: "d3v-stat" }, "三角面：", h("b", null, s.mesh.triangles.toLocaleString())),
@@ -149,6 +149,7 @@ function SessionDrawer({ sessionStore, viewRequest, completeViewRequest }) {
     sessionStore.set({ selected: path, loading: true, error: "" });
     try {
       const mesh = await readWorkspaceModel(path);
+      mesh.name = path.split("/").pop();
       const row = sessionStore.getSnapshot().files.find(x => x.path === path);
       sessionStore.set({ mesh, loading: false, mtime: row?.mtime || 0 });
       setReset(x => x + 1);
@@ -195,7 +196,7 @@ function SessionDrawer({ sessionStore, viewRequest, completeViewRequest }) {
         s.mesh && h(ViewPresetBar, { onPick: (yaw, pitch, ortho) => setView({ yaw, pitch, ortho }), color, onPickColor: setColor }),
         s.loading && h("div", { className: "d3v-loading" }, "正在更新模型…"),
         s.error && h("div", { className: "d3v-error" }, s.error),
-        s.mesh && h("div", { className: "d3v-help" }, "拖动旋转 · 滚轮缩放 · 文件变化时自动更新")),
+        s.mesh && h("div", { className: "d3v-help" }, "拖动模型旋转 · 拖动背景平移 · 滚轮缩放 · 文件变化时自动更新")),
       h("footer", { className: "d3v-footer" },
         s.mesh ? h(React.Fragment, null,
           h("span", { className: "d3v-live" }, "实时"),

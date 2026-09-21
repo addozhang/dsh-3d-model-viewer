@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { meshVolume, parseStl, toArrayBuffer } from "../src/parse.js";
-import { hexCss, rgbCss, sameColor, VIEW_PRESETS, PRINTER_PROFILES } from "../src/viewer.js";
+import { hexCss, rgbCss, sameColor, VIEW_PRESETS, PRINTER_PROFILES, rayMesh } from "../src/viewer.js";
 import { readFileSync } from "node:fs";
 
 test("meshVolume of an outward-wound cube", () => {
@@ -66,4 +66,31 @@ test("printer profiles default to X2D", () => {
   assert.equal(PRINTER_PROFILES[0][0], "X2D");
   assert.deepEqual(PRINTER_PROFILES[0].slice(1), [256, 256, 260]);
   assert.ok(PRINTER_PROFILES.some(p => p[0] === "H2D" && p[1] === 350));
+});
+
+test("ray picking hits the model and misses the background", () => {
+  // solid cube [0,10]^3 built with outward winding (see volume test)
+  const s = 10;
+  const tris = [];
+  for (let axis = 0; axis < 3; axis++) {
+    for (const dir of [1, -1]) {
+      const n = [0, 0, 0]; n[axis] = dir;
+      const u = [0, 0, 0], v = [0, 0, 0];
+      u[(axis + 1) % 3] = 1; v[(axis + 2) % 3] = 1;
+      const cross = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const [uu, vv] = cross[axis] === dir ? [u, v] : [v, u];
+      const base = n.map(x => x > 0 ? s : 0);
+      const c0 = base, c1 = base.map((x, i) => x + uu[i] * s), c2 = base.map((x, i) => x + (uu[i] + vv[i]) * s), c3 = base.map((x, i) => x + vv[i] * s);
+      tris.push([c0, c1, c2], [c0, c2, c3]);
+    }
+  }
+  const data = new Float32Array(tris.length * 18);
+  let p = 0;
+  for (const t of tris) for (const v of t) { data[p++] = v[0]; data[p++] = v[1]; data[p++] = v[2]; data[p++] = 0; data[p++] = 1; data[p++] = 0; }
+  const mesh = { lo: [0, 0, 0], hi: [10, 10, 10], triangles: tris.length, data };
+  assert.ok(rayMesh([5, 5, 20], [0, 0, -1], mesh), "frontal ray hits");
+  assert.ok(rayMesh([5, -20, 5], [0, 1, 0], mesh), "side ray hits");
+  assert.ok(!rayMesh([-5, 5, 20], [0, 0, -1], mesh), "parallel offset ray misses");
+  assert.ok(!rayMesh([5, 5, 20], [0, 0, 1], mesh), "ray pointing away misses");
+  assert.equal(rayMesh([50, 50, 50], [1, 0, 0], mesh), false, "ray outside bbox misses fast");
 });
