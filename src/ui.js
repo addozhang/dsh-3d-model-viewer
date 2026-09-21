@@ -79,62 +79,6 @@ async function readWorkspaceModel(path) {
   return path.toLowerCase().endsWith(".3mf") ? parse3mf(buf) : parseStl(buf);
 }
 
-/** Standalone dialog for opening local STL/3MF files (drop or file picker). */
-export function Overlay({ store }) {
-  const s = useStore(store), input = React.useRef(null);
-  const [drag, setDrag] = React.useState(false), [reset, setReset] = React.useState(0);
-  const [view, setView] = React.useState(), [color, setColor] = React.useState(DEFAULT_COLOR);
-  React.useEffect(() => {
-    if (!s.open) return;
-    const key = e => { if (e.key === "Escape") store.set({ open: false }); };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [s.open]);
-  if (!s.open) return null;
-  const load = async file => {
-    if (!file) return;
-    if (file.size > 250 * 1024 * 1024) { store.set({ error: "文件超过 250 MB 限制" }); return; }
-    store.set({ loading: true, error: "", name: file.name });
-    try {
-      const buf = await file.arrayBuffer(), ext = file.name.toLowerCase();
-      const mesh = ext.endsWith(".3mf") ? await parse3mf(buf) : parseStl(buf);
-      store.set({ mesh, loading: false });
-      setReset(x => x + 1);
-    } catch (e) {
-      store.set({ error: e instanceof Error ? e.message : String(e), loading: false, mesh: null });
-    }
-  };
-  const drop = e => { e.preventDefault(); setDrag(false); load(e.dataTransfer.files[0]); };
-  return h("div", { className: "d3v-backdrop", onMouseDown: e => { if (e.target === e.currentTarget) store.set({ open: false }); } },
-    h("section", { className: "d3v-dialog", role: "dialog", "aria-modal": "true", "aria-label": "3D 模型预览" },
-      h("header", { className: "d3v-header" },
-        h("div", null,
-          h("div", { className: "d3v-title" }, "3D 模型预览"),
-          h("div", { className: "d3v-sub", title: s.name }, s.name || "STL / 3MF · 文件仅在浏览器本地解析")),
-        h("div", { className: "d3v-spacer" }),
-        s.mesh && h("button", { className: "d3v-btn", onClick: () => setReset(x => x + 1) }, "重置视角"),
-        h("button", { className: "d3v-btn", onClick: () => input.current?.click() }, s.loading ? "读取中…" : "打开文件"),
-        h("input", { ref: input, className: "d3v-input", type: "file", accept: ".stl,.3mf,model/stl,model/3mf", onChange: e => load(e.target.files[0]) }),
-        h("button", { className: "d3v-btn d3v-close", "aria-label": "关闭", onClick: () => store.set({ open: false }) }, "×")),
-      h("main", { className: "d3v-stage" + (drag ? " d3v-drop" : ""), onDragOver: e => { e.preventDefault(); setDrag(true); }, onDragLeave: () => setDrag(false), onDrop: drop },
-        s.mesh && h(Viewer, { mesh: s.mesh, resetToken: reset, view, color }),
-        s.mesh && h(ViewPresetBar, { onPick: (yaw, pitch, ortho) => setView({ yaw, pitch, ortho }), color, onPickColor: setColor }),
-        !s.mesh && !s.error && h("div", { className: "d3v-empty" },
-          h("div", { className: "d3v-empty-card" },
-            h("div", { className: "d3v-empty-icon" }, "◇"),
-            h("div", null, s.loading ? "正在解析模型…" : "将 STL / 3MF 拖到这里"),
-            h("div", { className: "d3v-empty-note" }, "或点击右上角“打开文件”"))),
-        s.error && h("div", { className: "d3v-error" }, s.error),
-        s.mesh && h("div", { className: "d3v-help" }, "拖动模型旋转 · 拖动背景平移 · 滚轮缩放 · 1-7 视角 R 复位")),
-      h("footer", { className: "d3v-footer" },
-        s.mesh ? h(React.Fragment, null,
-          h("span", { className: "d3v-stat" }, "三角面：", h("b", null, s.mesh.triangles.toLocaleString())),
-          h("span", { className: "d3v-stat" }, "尺寸：", h("b", null, s.mesh.size.map(v => v.toFixed(2)).join(" × ") + " mm")),
-          h("span", { className: "d3v-stat" }, "体积：", h("b", null, (s.mesh.volume / 1000).toFixed(2) + " cm³")),
-          PRINT_INSIGHTS_ENABLED && h(PrintInsights, { mesh: s.mesh }))
-          : h("span", null, "支持二进制/ASCII STL，以及包含网格的 3MF"))));
-}
-
 function SessionAction({ sessionStore, openView }) {
   const s = useStore(sessionStore);
   if (!s.files.length) return null;

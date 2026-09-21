@@ -1,13 +1,13 @@
 // Plugin registration: slots, document previews, locale.
 import { React, h, useStore, makeStore, makeSessionStore } from "./core.js";
 import { injectStyles } from "./styles.js";
-import { Overlay, SessionBridge, SessionDrawerOverlay, Model3dBody, M3D_DOC_ID } from "./ui.js";
+import { SessionBridge, SessionDrawerOverlay, Model3dBody, M3D_DOC_ID } from "./ui.js";
 
 export const INJECT = ["slots", "sessions", "locale", "documentPreviews"];
 
 export function apply(ctx) {
   injectStyles();
-  const store = makeStore(), layoutStore = makeStore();
+  const layoutStore = makeStore();
   const sessionStores = new Map();
   const stores = {
     get(id) {

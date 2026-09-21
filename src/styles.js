@@ -1,8 +1,5 @@
 // Styles, injected once per document as a <style> tag by the plugin.
 export const CSS = `
-[data-dsh-3d-trigger]{box-sizing:border-box;color:var(--dsw-alias-label-primary);background:transparent;border:0;cursor:pointer;font:inherit}
-.d3v-trigger{width:100%;height:42px;border-radius:12px;display:flex;align-items:center;gap:9px;padding:0 10px;margin-top:4px}
-.d3v-trigger:hover{background:var(--dsw-alias-interactive-bg-hover)}.d3v-trigger.rail{width:36px;height:36px;padding:0;justify-content:center;border-radius:50%}.d3v-icon{font-size:19px;line-height:1}.d3v-label{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .d3v-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(5,10,20,.62);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px}
 .d3v-dialog{width:min(1080px,calc(100vw - 40px));height:min(780px,calc(100vh - 40px));background:var(--dsw-specific-menu,#17191d);color:var(--dsw-alias-label-primary,#eee);border:1px solid var(--dsw-alias-border-l1,#444);border-radius:16px;box-shadow:0 22px 80px rgba(0,0,0,.45);display:grid;grid-template-rows:auto 1fr auto;overflow:hidden}
 .d3v-header{height:56px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--dsw-alias-border-l1,#333)}.d3v-title{font-size:16px;font-weight:600}.d3v-sub{color:var(--dsw-alias-label-tertiary,#999);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.d3v-spacer{flex:1}
