@@ -39,12 +39,13 @@ test("toArrayBuffer handles views with byteOffset", () => {
   assert.equal(new Uint8Array(buf).join(","), "1,2,3");
 });
 
-test("parseStl reads the workspace pair STL", () => {
-  const bytes = readFileSync(new URL("../fixtures/pair.stl", import.meta.url));
+test("parseStl reads the generated layout fixture", () => {
+  const bytes = readFileSync(new URL("../fixtures/layout.stl", import.meta.url));
   const mesh = parseStl(toArrayBuffer(bytes));
-  assert.equal(mesh.triangles, 392);
+  assert.equal(mesh.triangles, 24);
   assert.deepEqual(mesh.size.map(v => +v.toFixed(1)), [17.2, 12.6, 12.3]);
-  assert.ok(mesh.volume > 0 && mesh.volume < 5000, `volume in mm³: ${mesh.volume}`);
+  // two 5.4 x 12.6 x 12.3 boxes = 2 * 836.892 mm³
+  assert.ok(Math.abs(mesh.volume - 1673.784) < 0.5, `volume in mm³: ${mesh.volume}`);
 });
 
 test("color helpers round-trip", () => {
@@ -113,9 +114,9 @@ test("parseHexColor accepts spec 3MF color forms", () => {
 });
 
 test("ASCII STL is not misread as binary (offset-80 facet-count trap)", () => {
-  const bytes = readFileSync(new URL("../fixtures/ascii.stl", import.meta.url));
+  const bytes = readFileSync(new URL("../fixtures/box-ascii.stl", import.meta.url));
   const mesh = parseStl(toArrayBuffer(bytes));
   assert.equal(mesh.triangles, 12);
-  assert.ok(Math.abs(mesh.volume / 1000 - 0.61) < 0.01, `volume: ${mesh.volume}`);
-  assert.deepEqual(mesh.size.map(v => +v.toFixed(2)), [5.4, 12.6, 12.3]);
+  assert.ok(Math.abs(mesh.volume / 1000 - 0.24) < 0.001, `volume: ${mesh.volume}`);
+  assert.deepEqual(mesh.size.map(v => +v.toFixed(2)), [4, 10, 6]);
 });

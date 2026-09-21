@@ -80,7 +80,7 @@ test("document body parses bytes and offers tools + print insights", async () =>
     slots: { register: (o, c) => { if (o.key?.endsWith("/model3d")) DocBody = c; return o; }, inject: (n, r) => { r(); } },
     sessions: { list: { subscribe() { return () => {}; }, getSnapshot: () => ({ current: "" }) } },
   });
-  const bytes = new Uint8Array(readFileSync(new URL("../fixtures/pair.stl", import.meta.url)));
+  const bytes = new Uint8Array(readFileSync(new URL("../fixtures/layout.stl", import.meta.url)));
   const props = { content: { kind: "bytes", data: bytes }, resourceAddress: "dsh-resource://file/session/s/pair.stl" };
   R.reset();
   DocBody(props);
