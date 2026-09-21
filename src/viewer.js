@@ -320,7 +320,10 @@ export function Viewer({ mesh, resetToken, view, color }) {
     const pd = e => {
       down = true; lx = e.clientX; ly = e.clientY;
       const ray = pointerRay(e);
-      mode = ray && rayMesh(ray[0], ray[1], mesh) ? "rotate" : "pan";
+      // Anything over the model's bounding box counts as dragging the model
+      // (a plate layout has gaps between parts); true background pans.
+      const onModel = ray && (rayMesh(ray[0], ray[1], mesh) || rayBox(ray[0], ray[1], mesh.lo, mesh.hi));
+      mode = onModel ? "rotate" : "pan";
       if (typeof console !== "undefined" && console.debug) console.debug("d3v-pick", mode);
       canvas.style.cursor = mode === "rotate" ? "grabbing" : "move";
       canvas.setPointerCapture(e.pointerId);
