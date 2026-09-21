@@ -299,12 +299,15 @@ export function Viewer({ mesh, resetToken, view, color }) {
         const f = 1 / Math.hypot(dx, dy, 1);
         o = [0, 0, 0]; d = [dx * f, dy * f, dz * f];
       }
+      // M = S·R with translation t: p = Rᵀ·(v − t)/S² keeps the ray in true
+      // model millimetres (uniform scaling, so direction needs the same fix).
       const sigma = Math.hypot(M[0], M[1], M[2]) || 1;
-      const q = [(o[0] - M[12]) / sigma, (o[1] - M[13]) / sigma, (o[2] - M[14]) / sigma];
-      const dq = [d[0] / sigma, d[1] / sigma, d[2] / sigma];
+      const invS = 1 / (sigma * sigma);
+      const q = [o[0] - M[12], o[1] - M[13], o[2] - M[14]];
+      const dq = [d[0], d[1], d[2]];
       return [
-        [M[0] * q[0] + M[4] * q[1] + M[8] * q[2], M[1] * q[0] + M[5] * q[1] + M[9] * q[2], M[2] * q[0] + M[6] * q[1] + M[10] * q[2]],
-        [M[0] * dq[0] + M[4] * dq[1] + M[8] * dq[2], M[1] * dq[0] + M[5] * dq[1] + M[9] * dq[2], M[2] * dq[0] + M[6] * dq[1] + M[10] * dq[2]],
+        [(M[0] * q[0] + M[4] * q[1] + M[8] * q[2]) * invS, (M[1] * q[0] + M[5] * q[1] + M[9] * q[2]) * invS, (M[2] * q[0] + M[6] * q[1] + M[10] * q[2]) * invS],
+        [(M[0] * dq[0] + M[4] * dq[1] + M[8] * dq[2]) * invS, (M[1] * dq[0] + M[5] * dq[1] + M[9] * dq[2]) * invS, (M[2] * dq[0] + M[6] * dq[1] + M[10] * dq[2]) * invS],
       ];
     };
 
@@ -318,6 +321,7 @@ export function Viewer({ mesh, resetToken, view, color }) {
       down = true; lx = e.clientX; ly = e.clientY;
       const ray = pointerRay(e);
       mode = ray && rayMesh(ray[0], ray[1], mesh) ? "rotate" : "pan";
+      if (typeof console !== "undefined" && console.debug) console.debug("d3v-pick", mode);
       canvas.style.cursor = mode === "rotate" ? "grabbing" : "move";
       canvas.setPointerCapture(e.pointerId);
     };
