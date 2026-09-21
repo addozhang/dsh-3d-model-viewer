@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { meshVolume, parseStl, toArrayBuffer } from "../src/parse.js";
-import { hexCss, rgbCss, sameColor, VIEW_PRESETS, PRINTER_PROFILES, rayMesh } from "../src/viewer.js";
+import { hexCss, rgbCss, sameColor, VIEW_PRESETS, PRINTER_PROFILES, rayMesh, orthoHalfSize } from "../src/viewer.js";
 import { readFileSync } from "node:fs";
 
 test("meshVolume of an outward-wound cube", () => {
@@ -93,4 +93,11 @@ test("ray picking hits the model and misses the background", () => {
   assert.ok(!rayMesh([-5, 5, 20], [0, 0, -1], mesh), "parallel offset ray misses");
   assert.ok(!rayMesh([5, 5, 20], [0, 0, 1], mesh), "ray pointing away misses");
   assert.equal(rayMesh([50, 50, 50], [1, 0, 0], mesh), false, "ray outside bbox misses fast");
+});
+
+test("orthographic zoom maps wheel distance to view half-height", () => {
+  assert.equal(orthoHalfSize(5.5), 1.15);           // default zoom = base margin
+  assert.equal(orthoHalfSize(11), 2.3);             // zoom out halves the model size
+  assert.ok(orthoHalfSize(1.2) < orthoHalfSize(5.5));
+  assert.ok(orthoHalfSize(20) > orthoHalfSize(11));
 });

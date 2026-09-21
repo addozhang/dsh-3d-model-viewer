@@ -61,14 +61,17 @@ const IDENTITY = () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 
 const buildRot = (yaw, pitch) => mul(ry(yaw), rx(pitch));
 const DEFAULT_ROT = () => buildRot(.65, -.45);
 
+/** Orthographic half-height at the current wheel zoom: distance-independent. */
+export const orthoHalfSize = (zoom) => 1.15 * (zoom / 5.5);
+
 function perspective(aspect) {
   const f = 1 / Math.tan(Math.PI / 8), near = .01, far = 100;
   return new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0]);
 }
 
-function orthographic(aspect) {
-  // Model is normalized to radius 1 at the origin; show a little margin.
-  const k = 1.15, near = .01, far = 100;
+function orthographic(aspect, k) {
+  // Model is normalized to radius 1 at the origin; k is the view half-height.
+  const near = .01, far = 100;
   return new Float32Array([1 / (k * aspect), 0, 0, 0, 0, 1 / k, 0, 0, 0, 0, -2 / (far - near), 0, 0, 0, -(far + near) / (far - near), 1]);
 }
 
@@ -240,7 +243,7 @@ export function Viewer({ mesh, resetToken, view, color }) {
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       const aspect = w / hh;
-      const proj = o.ortho ? orthographic(aspect) : perspective(aspect);
+      const proj = o.ortho ? orthographic(aspect, orthoHalfSize(zoom)) : perspective(aspect);
       const scale = 1 / mesh.radius;
       const model = new Float32Array(rot);
       for (const idx of [0, 1, 2, 4, 5, 6, 8, 9, 10]) model[idx] *= scale;
@@ -291,7 +294,7 @@ export function Viewer({ mesh, resetToken, view, color }) {
       const px = (e.clientX - rect.left) / rect.width, py = (e.clientY - rect.top) / rect.height;
       let o, d;
       if (orient.current.ortho) {
-        const k = 1.15, aspect = rect.width / rect.height;
+        const k = orthoHalfSize(zoom), aspect = rect.width / rect.height;
         o = [(px * 2 - 1) * k * aspect, 1 - py * 2, 0]; d = [0, 0, -1];
       } else {
         const t = Math.tan(Math.PI / 8), aspect = rect.width / rect.height;
@@ -314,7 +317,7 @@ export function Viewer({ mesh, resetToken, view, color }) {
     const panScale = () => {
       const rect = canvas.getBoundingClientRect();
       const hpx = rect.height || 1;
-      return orient.current.ortho ? 2 * 1.15 / hpx : 2 * Math.tan(Math.PI / 8) * zoom / hpx;
+      return orient.current.ortho ? 2 * orthoHalfSize(zoom) / hpx : 2 * Math.tan(Math.PI / 8) * zoom / hpx;
     };
 
     const pd = e => {
@@ -324,7 +327,6 @@ export function Viewer({ mesh, resetToken, view, color }) {
       // (a plate layout has gaps between parts); true background pans.
       const onModel = ray && (rayMesh(ray[0], ray[1], mesh) || rayBox(ray[0], ray[1], mesh.lo, mesh.hi));
       mode = onModel ? "rotate" : "pan";
-      if (typeof console !== "undefined" && console.debug) console.debug("d3v-pick", mode);
       canvas.style.cursor = mode === "rotate" ? "grabbing" : "move";
       canvas.setPointerCapture(e.pointerId);
     };
