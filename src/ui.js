@@ -15,8 +15,11 @@ function fileSize(n) {
   return `${(n / 1048576).toFixed(1)} MB`;
 }
 
+// Print-check panel is disabled for now; flip to true to bring it back.
+export const PRINT_INSIGHTS_ENABLED = false;
+
 /** Build-volume fit check, mesh volume, and a filament weight estimate. */
-export function PrintInsights({ mesh }) {
+function PrintInsights({ mesh }) {
   const [printer, setPrinter] = React.useState(PRINTER_PROFILES[0][0]);
   const [material, setMaterial] = React.useState(MATERIALS[0][0]);
   const [infill, setInfill] = React.useState(15);
@@ -65,7 +68,7 @@ export function Model3dBody({ content, resourceAddress, t }) {
     state.status === "ready" && h("div", { className: "d3v-doc-foot" },
       h("div", { className: "d3v-doc-stats" },
         `${name} · ${state.mesh.triangles.toLocaleString()} △ · ${state.mesh.size.map(v => v.toFixed(1)).join(" × ")} mm`),
-      h(PrintInsights, { mesh: state.mesh })),
+      PRINT_INSIGHTS_ENABLED && h(PrintInsights, { mesh: state.mesh })),
     state.status === "ready" && h("div", { className: "d3v-help" }, "拖动模型旋转 · 拖动背景平移 · 滚轮缩放 · 1-7 视角 R 复位"));
 }
 
@@ -128,7 +131,7 @@ export function Overlay({ store }) {
           h("span", { className: "d3v-stat" }, "三角面：", h("b", null, s.mesh.triangles.toLocaleString())),
           h("span", { className: "d3v-stat" }, "尺寸：", h("b", null, s.mesh.size.map(v => v.toFixed(2)).join(" × ") + " mm")),
           h("span", { className: "d3v-stat" }, "体积：", h("b", null, (s.mesh.volume / 1000).toFixed(2) + " cm³")),
-          h(PrintInsights, { mesh: s.mesh }))
+          PRINT_INSIGHTS_ENABLED && h(PrintInsights, { mesh: s.mesh }))
           : h("span", null, "支持二进制/ASCII STL，以及包含网格的 3MF"))));
 }
 
@@ -202,7 +205,7 @@ function SessionDrawer({ sessionStore, viewRequest, completeViewRequest }) {
           h("span", { className: "d3v-live" }, "实时"),
           h("span", { className: "d3v-stat" }, "三角面：", h("b", null, s.mesh.triangles.toLocaleString())),
           h("span", { className: "d3v-stat" }, "尺寸：", h("b", null, s.mesh.size.map(v => v.toFixed(2)).join(" × ") + " mm")),
-          h(PrintInsights, { mesh: s.mesh }),
+          PRINT_INSIGHTS_ENABLED && h(PrintInsights, { mesh: s.mesh }),
           h("button", { className: "d3v-btn", onClick: () => setReset(x => x + 1) }, "重置视角"))
           : h("span", null, "暂无可预览模型"))));
 }

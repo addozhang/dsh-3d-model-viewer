@@ -92,13 +92,11 @@ test("document body parses bytes and offers tools + print insights", async () =>
   assert.ok(barHost, "toolbar rendered");
   const foot = kids.find(c => c.props?.className === "d3v-doc-foot");
   assert.ok(foot, "stats foot rendered");
+  // print-insights panel is feature-flagged off for now
   const insights = foot.children.find(c => c.type?.name === "PrintInsights");
-  assert.ok(insights, "print insights rendered");
-  const insightVdom = insights.type(insights.props);
-  const text = JSON.stringify(insightVdom);
-  assert.ok(text.includes("体积"), "volume shown");
-  assert.ok(text.includes("适配 X2D") || text.includes("超出"), "fit check shown");
-  assert.ok(text.includes("≈"), "weight estimate shown");
+  assert.ok(!insights, "print insights disabled by flag");
+  const stats = foot.children.find(c => c.props?.className === "d3v-doc-stats");
+  assert.ok(JSON.stringify(stats).includes("△"), "triangle stats still shown");
 
   // preset click passes ortho through to the Viewer
   const tools = barHost.type(barHost.props);
