@@ -14,11 +14,12 @@ function makeStubReact() {
     Fragment: "Fragment",
     useRef: () => ({ current: null }),
     useState: (v) => { const i = calls++; if (states[i] === undefined) states[i] = typeof v === "function" ? v() : v; return [states[i], (x) => { states[i] = typeof x === "function" ? x(states[i]) : x; }]; },
-    useEffect: (fn) => { try { fn(); } catch (e) { console.error("effect threw:", e.message); } return () => {}; },
+    useEffect: (fn) => { let cleanup = () => {}; try { const c = fn(); if (typeof c === "function") cleanup = c; } catch (e) { console.error("effect threw:", e.message); } R.cleanups.push(cleanup); return cleanup; },
     useSyncExternalStore: (s, g) => g(),
     useCallback: (fn) => fn,
   };
   R.reset = () => { calls = 0; };
+  R.cleanups = [];
   R.states = states;
   return R;
 }
@@ -118,4 +119,58 @@ test("document body parses bytes and offers tools + print insights", async () =>
   R.reset();
   const colored = DocBody(props).children.find(c => c?.props?.mesh);
   assert.deepEqual(colored.props.color, [.95, .55, .18]);
+});
+
+test("SessionBridge survives class-method ObservableSnapshots (this-binding)", async () => {
+  const { api, R } = await loadBundle();
+  // document stubs SessionBridge touches
+  globalThis.document.body = { innerText: "pair.stl" };
+  globalThis.document.querySelectorAll = () => [];
+  const fetchCalls = [];
+  globalThis.fetch = async (url) => {
+    fetchCalls.push(url);
+    return { ok: true, json: async () => ({ files: [{ path: "a/pair.stl", name: "pair.stl", size: 1, mtime: 1 }] }) };
+  };
+  // eventSource whose getSnapshot/subscribe are prototype methods reading `this`
+  class EventSource {
+    constructor() { this.window = { entries: [], revision: 0, hasMore: false, change: { kind: "append", entries: [] } }; }
+    subscribe() { return () => {}; }
+    getSnapshot() { return this.window; }
+  }
+  class Sessions {
+    constructor() { this.list = { subscribe() { return () => {}; }, getSnapshot: () => ({ current: "s1" }) }; }
+    binding(id) { return id === "s1" ? { sessionId: id, eventSource: new EventSource() } : undefined; }
+  }
+  let Bridge = null;
+  api.apply({
+    effect: (fn) => { fn(); return () => {}; },
+    locale: { bind: () => (k) => k, register: () => {} },
+    documentPreviews: { register: () => () => {} },
+    slots: {
+      register: (o, c) => { if (o.id === "3d-model-preview-action") Bridge = c; return o; },
+      inject: (n, r) => { r(); },
+    },
+    sessions: new Sessions(),
+  });
+  assert.ok(Bridge, "SessionBridge captured");
+  // the old bug: unbound getSnapshot loses `this` and throws here
+  const sessionStores = new Map();
+  const stores = { get: (id) => sessionStores.get(id) ?? (sessionStores.set(id, makeSessionStoreLike()), sessionStores.get(id)) };
+  function makeSessionStoreLike() {
+    let state = { files: [], selected: "", mesh: null, error: "", loading: false, mtime: 0 };
+    const listeners = new Set();
+    return { getSnapshot: () => state, subscribe: (fn) => (listeners.add(fn), () => listeners.delete(fn)), set: (p) => { state = { ...state, ...p }; listeners.forEach(f => f()); } };
+  }
+  const layoutStore = makeSessionStoreLike();
+  R.reset();
+  await new Promise(r => setTimeout(r, 50));
+  let vnode;
+  assert.doesNotThrow(() => { vnode = Bridge({ sessionId: "s1", sessions: new Sessions(), stores, layoutStore }); });
+  // after the fetch settles the button should appear
+  await new Promise(r => setTimeout(r, 100));
+  R.reset();
+  vnode = Bridge({ sessionId: "s1", sessions: new Sessions(), stores, layoutStore });
+  assert.ok(vnode && vnode.props, "SessionBridge renders");
+  for (const c of R.cleanups.splice(0)) c();
+  delete globalThis.fetch;
 });
