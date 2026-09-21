@@ -7,7 +7,7 @@ Models can be inspected directly in the sidebar document preview — no
 external tool needed — and the plugin doubles as a live preview drawer for
 active sessions.
 
-![3MF document-tab preview](docs/screenshot-doctab.webp)
+![3MF document-tab preview](https://github.com/addozhang/dsh-3d-model-viewer/raw/main/docs/screenshot-doctab.webp)
 
 ## Features
 
