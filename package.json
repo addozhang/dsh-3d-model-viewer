@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "python3 scripts/e2e.py"
   },
   "dsh": {
     "client": {

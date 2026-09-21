@@ -69,3 +69,16 @@ dsh plugin --profile web add /Users/addo/workspaces/private_w/dsh-3d-model-viewe
 - **拖动分区**：pointerdown 时对模型做射线拾取（包围盒粗测 + Möller–Trumbore 三角测试）——光标在模型上→旋转（抓取光标），在背景上→平移模型位置（移动光标）
 - **键盘快捷键**（画布获得焦点后）：`1-7` 切换预设视角，`R` 复位默认视角
 - **截图导出**：工具栏「截图」按钮，当前视图存为 PNG（文件名取模型名 + 时间戳）
+
+## 测试
+
+```bash
+npm test          # 单测 + 构建产物冒烟测试（node --test）
+npm run test:e2e  # 端到端：起真实 dsh web 实例 + Playwright 驱动真实 GUI
+```
+
+e2e 依赖本机的 python3 + playwright + Chrome，从 `~/.dsh/.credentials.yaml` 读取签名密钥铸造会话 cookie。环境变量：
+
+- `E2E_WORKSPACE`：目标工作区名（默认 `3d-diy`）
+- `E2E_WORKSPACE_DIR`：dsh web 服务的工作目录（模型扫描根）
+- `E2E_SESSION_SUBSTR`：直接指定会话名子串（跳过自动定位）
