@@ -30,5 +30,5 @@
   "devDependencies": {
     "esbuild": "^0.25.0"
   },
-  "files": ["lib/index.js", "lib/client.js", "README.md"]
+  "files": ["lib/index.js", "lib/client.js", "README.md", "README.zh-CN.md"]
 }
