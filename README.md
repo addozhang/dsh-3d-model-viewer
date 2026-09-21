@@ -52,3 +52,13 @@ dsh plugin --profile web add /Users/addo/workspaces/private_w/dsh-3d-model-viewe
 - 文件内容以 `content.kind === "bytes"` 完整字节到达后，在浏览器本地解析（复用同一套 STL/3MF 解析器）
 - 画布支持拖动旋转、滚轮缩放，左下角显示文件名、三角面数与包围盒尺寸（mm）
 - `binaryExtensions` 声明后，STL/3MF 不再落入纯文本回退预览
+
+## v0.2：源码化重构 + 打印检查
+
+- 仓库改为 `src/` 多文件源码（core / styles / parse / viewer / ui / app），`npm run build` 用 esbuild 生成 `lib/client.js`
+- 轴向视角（前/后/左/右/顶/底）自动切换正交投影，正交视图下显示包围盒三向尺寸标签（X 红 / Y 绿 / Z 蓝，毫米）；手动拖拽旋转自动回到透视
+- `npm test`：解析与体积数学单测 + 构建产物冒烟测试
+- 打印检查面板（文档预览底部 / 抽屉底部）：
+  - 打印机适配：H2D 350×320×325 / X1C·P1 256³ / A1 256×210×210 / A1 mini 180³，超出当前所选幅面时红色告警
+  - 网格封闭体积（cm³，符号四面体法）
+  - 耗材估算：材料（PLA/PETG/PC/ABS/TPU）× 填充率（10–100%），壁壳开销按非填充部分 25% 近似
