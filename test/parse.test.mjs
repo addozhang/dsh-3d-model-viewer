@@ -62,6 +62,8 @@ test("axis view presets are orthographic, iso is not", () => {
   }
 });
 
-test("printer profiles include H2D", () => {
+test("printer profiles default to X2D", () => {
+  assert.equal(PRINTER_PROFILES[0][0], "X2D");
+  assert.deepEqual(PRINTER_PROFILES[0].slice(1), [256, 256, 260]);
   assert.ok(PRINTER_PROFILES.some(p => p[0] === "H2D" && p[1] === 350));
 });

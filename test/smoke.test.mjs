@@ -97,7 +97,7 @@ test("document body parses bytes and offers tools + print insights", async () =>
   const insightVdom = insights.type(insights.props);
   const text = JSON.stringify(insightVdom);
   assert.ok(text.includes("体积"), "volume shown");
-  assert.ok(text.includes("适配 H2D") || text.includes("超出"), "fit check shown");
+  assert.ok(text.includes("适配 X2D") || text.includes("超出"), "fit check shown");
   assert.ok(text.includes("≈"), "weight estimate shown");
 
   // preset click passes ortho through to the Viewer

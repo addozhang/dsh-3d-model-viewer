@@ -21,7 +21,9 @@ export const VIEW_PRESETS = [
 ];
 
 // name, X, Y, Z build volume (mm)
+// X2D: main nozzle 256×256×260; dual-hotend/auxiliary use narrows X to 235.5.
 export const PRINTER_PROFILES = [
+  ["X2D", 256, 256, 260],
   ["H2D", 350, 320, 325],
   ["X1C / P1", 256, 256, 256],
   ["A1", 256, 210, 210],
