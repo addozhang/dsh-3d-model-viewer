@@ -69,7 +69,7 @@ export function Model3dBody({ content, resourceAddress, t }) {
       h("div", { className: "d3v-doc-stats" },
         `${name} · ${state.mesh.triangles.toLocaleString()} △ · ${state.mesh.size.map(v => v.toFixed(1)).join(" × ")} mm`),
       PRINT_INSIGHTS_ENABLED && h(PrintInsights, { mesh: state.mesh })),
-    state.status === "ready" && h("div", { className: "d3v-help" }, "拖动模型旋转 · 拖动背景平移 · 滚轮缩放 · 1-7 视角 R 复位"));
+    state.status === "ready" && h("div", { className: "d3v-help" }, "左键旋转 · 右键/Shift 平移 · 滚轮缩放 · 双击复位"));
 }
 
 async function readWorkspaceModel(path) {
@@ -143,7 +143,7 @@ function SessionDrawer({ sessionStore, viewRequest, completeViewRequest }) {
         s.mesh && h(ViewPresetBar, { onPick: (yaw, pitch, ortho) => setView({ yaw, pitch, ortho }), color, onPickColor: setColor }),
         s.loading && h("div", { className: "d3v-loading" }, "正在更新模型…"),
         s.error && h("div", { className: "d3v-error" }, s.error),
-        s.mesh && h("div", { className: "d3v-help" }, "拖动模型旋转 · 拖动背景平移 · 滚轮缩放 · 文件变化时自动更新")),
+        s.mesh && h("div", { className: "d3v-help" }, "左键旋转 · 右键/Shift 平移 · 滚轮缩放 · 双击复位 · 文件变化自动更新")),
       h("footer", { className: "d3v-footer" },
         s.mesh ? h(React.Fragment, null,
           h("span", { className: "d3v-live" }, "实时"),

@@ -286,47 +286,17 @@ export function Viewer({ mesh, resetToken, view, color }) {
     const request = () => { if (!raf) raf = requestAnimationFrame(draw); };
     redraw.current = request;
 
-    /** View-space pointer ray mapped into model space via inverse(model). */
-    const pointerRay = e => {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0 || !lastModel) return null;
-      const M = lastModel;
-      const px = (e.clientX - rect.left) / rect.width, py = (e.clientY - rect.top) / rect.height;
-      let o, d;
-      if (orient.current.ortho) {
-        const k = orthoHalfSize(zoom), aspect = rect.width / rect.height;
-        o = [(px * 2 - 1) * k * aspect, 1 - py * 2, 0]; d = [0, 0, -1];
-      } else {
-        const t = Math.tan(Math.PI / 8), aspect = rect.width / rect.height;
-        const dx = (px * 2 - 1) * t * aspect, dy = 1 - py * 2, dz = -1;
-        const f = 1 / Math.hypot(dx, dy, 1);
-        o = [0, 0, 0]; d = [dx * f, dy * f, dz * f];
-      }
-      // M = S·R with translation t: p = Rᵀ·(v − t)/S² keeps the ray in true
-      // model millimetres (uniform scaling, so direction needs the same fix).
-      const sigma = Math.hypot(M[0], M[1], M[2]) || 1;
-      const invS = 1 / (sigma * sigma);
-      const q = [o[0] - M[12], o[1] - M[13], o[2] - M[14]];
-      const dq = [d[0], d[1], d[2]];
-      return [
-        [(M[0] * q[0] + M[4] * q[1] + M[8] * q[2]) * invS, (M[1] * q[0] + M[5] * q[1] + M[9] * q[2]) * invS, (M[2] * q[0] + M[6] * q[1] + M[10] * q[2]) * invS],
-        [(M[0] * dq[0] + M[4] * dq[1] + M[8] * dq[2]) * invS, (M[1] * dq[0] + M[5] * dq[1] + M[9] * dq[2]) * invS, (M[2] * dq[0] + M[6] * dq[1] + M[10] * dq[2]) * invS],
-      ];
-    };
-
     const panScale = () => {
       const rect = canvas.getBoundingClientRect();
       const hpx = rect.height || 1;
       return orient.current.ortho ? 2 * orthoHalfSize(zoom) / hpx : 2 * Math.tan(Math.PI / 8) * zoom / hpx;
     };
 
+    // CAD-style drag semantics: left button always rotates (no pick guesswork
+    // to deadlock); right / middle button or Shift pans; double-click resets.
     const pd = e => {
       down = true; lx = e.clientX; ly = e.clientY;
-      const ray = pointerRay(e);
-      // Anything over the model's bounding box counts as dragging the model
-      // (a plate layout has gaps between parts); true background pans.
-      const onModel = ray && (rayMesh(ray[0], ray[1], mesh) || rayBox(ray[0], ray[1], mesh.lo, mesh.hi));
-      mode = onModel ? "rotate" : "pan";
+      mode = (e.button === 2 || e.button === 1 || e.shiftKey) ? "pan" : "rotate";
       canvas.style.cursor = mode === "rotate" ? "grabbing" : "move";
       canvas.setPointerCapture(e.pointerId);
     };
@@ -368,6 +338,10 @@ export function Viewer({ mesh, resetToken, view, color }) {
       shotPending = true;
       request();
     };
+    const noMenu = e => e.preventDefault();
+    const dbl = () => { orient.current = { rot: DEFAULT_ROT(), ortho: false }; pan.current = [0, 0]; request(); };
+    canvas.addEventListener("contextmenu", noMenu);
+    canvas.addEventListener("dblclick", dbl);
     canvas.addEventListener("pointerdown", pd);
     canvas.addEventListener("pointermove", pm);
     canvas.addEventListener("pointerup", pu);
@@ -383,6 +357,8 @@ export function Viewer({ mesh, resetToken, view, color }) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       labelsBox.remove();
+      canvas.removeEventListener("contextmenu", noMenu);
+      canvas.removeEventListener("dblclick", dbl);
       canvas.removeEventListener("pointerdown", pd);
       canvas.removeEventListener("pointermove", pm);
       canvas.removeEventListener("pointerup", pu);
@@ -396,7 +372,7 @@ export function Viewer({ mesh, resetToken, view, color }) {
   }, [mesh, resetToken]);
   return h("canvas", {
     ref, className: "d3v-canvas", "data-dsh-3d-canvas": "",
-    tabIndex: 0, role: "img", "aria-label": "3D 模型视图：拖动模型旋转，拖动背景平移，滚轮缩放",
+    tabIndex: 0, role: "img", "aria-label": "3D 模型视图：左键拖动旋转，右键或 Shift 拖动平移，滚轮缩放，双击复位",
     onKeyDown: e => e.stopPropagation(),
     style: { outline: "none" },
   });
