@@ -63,7 +63,7 @@ test("bundle registers document preview, slot, and locale", async () => {
     sessions: { list: { subscribe() { return () => {}; }, getSnapshot: () => ({ current: "" }) } },
   });
   const def = regs.find(r => r[0] === "preview")[1];
-  assert.equal(def.id, "@local/dsh-3d-model-viewer/model3d");
+  assert.equal(def.id, "@addozhang/dsh-3d-model-viewer/model3d");
   assert.deepEqual(def.extensions, ["stl", "3mf"]);
   assert.equal(def.priority, "extension");
   assert.equal(def.loading, "bytes-complete");

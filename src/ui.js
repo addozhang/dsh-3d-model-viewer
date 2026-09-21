@@ -3,7 +3,7 @@ import { React, h, useStore } from "./core.js";
 import { toArrayBuffer, parseStl, parse3mf } from "./parse.js";
 import { Viewer, ViewPresetBar, DEFAULT_COLOR, PRINTER_PROFILES, MATERIALS, INFILL_OPTIONS } from "./viewer.js";
 
-export const M3D_DOC_ID = "@local/dsh-3d-model-viewer/model3d";
+export const M3D_DOC_ID = "@addozhang/dsh-3d-model-viewer/model3d";
 
 function docFileName(address) {
   try { const m = decodeURIComponent(String(address)).match(/\/([^\/?#]+)$/); return m ? m[1] : ""; } catch { return ""; }

@@ -5,7 +5,7 @@ import { injectStyles } from "./styles.js";
 injectStyles();
 
 window.__ModuleLoader__.load({
-  id: "@local/dsh-3d-model-viewer",
+  id: "@addozhang/dsh-3d-model-viewer",
   factory: (require) => {
     setReact(require("react"));
     const module = { exports: {} };

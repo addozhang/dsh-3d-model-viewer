@@ -1,15 +1,20 @@
 {
-  "name": "@local/dsh-3d-model-viewer",
+  "name": "@addozhang/dsh-3d-model-viewer",
   "version": "0.3.0",
-  "private": true,
   "description": "Interactive STL/3MF viewer plugin for the DeepSeek Harness Web GUI: sidebar document preview, live session drawer, CAD navigation, orthographic dimension labels, 3MF part colors.",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/addozhang/dsh-3d-model-viewer.git"
   },
   "bugs": {
     "url": "https://github.com/addozhang/dsh-3d-model-viewer/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -39,5 +44,5 @@
   "devDependencies": {
     "esbuild": "^0.25.0"
   },
-  "files": ["lib/index.js", "lib/client.js", "README.md", "README.zh-CN.md"]
+  "files": ["lib/index.js", "lib/client.js", "README.md", "README.zh-CN.md", "LICENSE"]
 }

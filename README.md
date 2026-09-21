@@ -40,15 +40,17 @@ Everything is parsed in the browser; model files never leave the machine
 ## Install
 
 ```bash
-dsh plugin --profile web add /path/to/dsh-3d-model-viewer
+npm install @addozhang/dsh-3d-model-viewer
+# or from source: npm install github:addozhang/dsh-3d-model-viewer
 ```
 
-Then add to `$DSH_HOME/profiles/web/cordis.patch.yml`:
+Then add to `$DSH_HOME/profiles/web/package.json` dependencies and insert into
+`$DSH_HOME/profiles/web/cordis.patch.yml`:
 
 ```yaml
 - insert:
     - id: 3d-model-viewer
-      name: '@local/dsh-3d-model-viewer'
+      name: '@addozhang/dsh-3d-model-viewer'
 ```
 
 Refresh the Web GUI; if the client roster did not update, restart
