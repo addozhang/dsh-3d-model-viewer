@@ -22,17 +22,12 @@ DeepSeek Harness Web GUI 的本地交互式 STL / 3MF 预览插件。模型可�
 ## 安装
 
 ```bash
-npm install @addozhang/dsh-3d-model-viewer
-# 或从源码安装：npm install github:addozhang/dsh-3d-model-viewer
+dsh plugin --profile web add @addozhang/dsh-3d-model-viewer
 ```
 
-然后把包加入 `$DSH_HOME/profiles/web/package.json` 依赖，并在 `$DSH_HOME/profiles/web/cordis.patch.yml` 中插入：
+包自带 bundle patch（`cordis.patch.yml`），插件管理器会自动接入 profile，无需手改 `cordis.patch.yml`。
 
-```yaml
-- insert:
-    - id: 3d-model-viewer
-      name: '@addozhang/dsh-3d-model-viewer'
-```
+安装最新源码：`dsh plugin --profile web add github:addozhang/dsh-3d-model-viewer`
 
 刷新 Web GUI；若客户端 roster 未更新，重启 `dsh web` 后再刷新。
 

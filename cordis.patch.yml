@@ -1,0 +1,12 @@
+# The dsh-3d-model-viewer bundle patch: mounts the 3D viewer into the Web
+# profile's Host plugin tree. The Host half serves the local
+# /3d-model-viewer/files endpoint for the session drawer.
+#
+# The browser half (sidebar document preview, drawer, viewer) is declared
+# through this package's `dsh.client` manifest, so the modules node scans it
+# into the browser roster automatically and no client row is needed here.
+
+- insert:
+    - id: 3d-model-viewer
+      name: '@addozhang/dsh-3d-model-viewer'
+      inject: [webServer]

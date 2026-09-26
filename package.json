@@ -1,6 +1,6 @@
 {
   "name": "@addozhang/dsh-3d-model-viewer",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Interactive STL/3MF viewer plugin for the DeepSeek Harness Web GUI: sidebar document preview, live session drawer, CAD navigation, orthographic dimension labels, 3MF part colors.",
   "license": "MIT",
   "engines": {
@@ -20,7 +20,9 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
-    "./client": "./lib/client.js"
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "node build.mjs",
@@ -28,6 +30,9 @@
     "test:e2e": "python3 scripts/e2e.py"
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-ui-renderer",
@@ -44,5 +49,12 @@
   "devDependencies": {
     "esbuild": "^0.25.0"
   },
-  "files": ["lib/index.js", "lib/client.js", "README.md", "README.zh-CN.md", "LICENSE"]
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "cordis.patch.yml"
+  ]
 }

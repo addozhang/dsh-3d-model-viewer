@@ -42,18 +42,13 @@ Everything is parsed in the browser; model files never leave the machine
 ## Install
 
 ```bash
-npm install @addozhang/dsh-3d-model-viewer
-# or from source: npm install github:addozhang/dsh-3d-model-viewer
+dsh plugin --profile web add @addozhang/dsh-3d-model-viewer
 ```
 
-Then add to `$DSH_HOME/profiles/web/package.json` dependencies and insert into
-`$DSH_HOME/profiles/web/cordis.patch.yml`:
+The package declares its own bundle patch (`cordis.patch.yml`), so the plugin
+manager wires it into the profile — no manual `cordis.patch.yml` editing.
 
-```yaml
-- insert:
-    - id: 3d-model-viewer
-      name: '@addozhang/dsh-3d-model-viewer'
-```
+Latest source instead: `dsh plugin --profile web add github:addozhang/dsh-3d-model-viewer`
 
 Refresh the Web GUI; if the client roster did not update, restart
 `dsh web` and refresh again.
