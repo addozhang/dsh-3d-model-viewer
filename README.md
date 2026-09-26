@@ -22,6 +22,9 @@ active sessions.
 - **CAD-style navigation** — left-drag rotates (true trackball, no gimbal
   limits), right / middle / Shift-drag pans, wheel zooms (perspective and
   orthographic), double-click resets.
+- **Multi-plate switcher** — 3MF projects carrying a Bambu plate table get
+  an "全部 | 盘 N…" toolbar row; each plate renders alone, re-centered, with
+  its own dimension labels.
 - **View presets** — front/back/left/right/top/bottom use an orthographic
   camera and show labelled bounding-box dimensions (mm); iso is the classic
   perspective view. Keyboard: `1-7` presets, `R` reset (when the canvas is

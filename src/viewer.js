@@ -126,8 +126,19 @@ export function rayMesh(o, d, mesh, limitTriangles = 400000) {
   return false;
 }
 
-export function ViewPresetBar({ onPick, color, onPickColor }) {
+export function ViewPresetBar({ onPick, color, onPickColor, plates, plate, onPickPlate }) {
   return h("div", { className: "d3v-viewtools", "data-dsh-3d-views": "" },
+    plates && plates.length > 1 && h("div", { className: "d3v-views", title: "切换打印盘" },
+      h("button", {
+        type: "button", className: "d3v-view-btn" + (plate < 0 ? " active" : ""),
+        onPointerDown: e => e.stopPropagation(), onClick: () => onPickPlate(-1),
+      }, "全部"),
+      plates.map((p, i) =>
+        h("button", {
+          key: p.id, type: "button", className: "d3v-view-btn" + (plate === i ? " active" : ""),
+          title: `${p.label} · ${p.triangles.toLocaleString()} △`,
+          onPointerDown: e => e.stopPropagation(), onClick: () => onPickPlate(i),
+        }, p.label))),
     h("div", { className: "d3v-views" },
       VIEW_PRESETS.map(([k, label, ang]) =>
         h("button", {
@@ -163,12 +174,13 @@ const DIM_ANCHORS = (lo, hi, margin) => ([
   ["z", [hi[0] + margin, lo[1], (lo[2] + hi[2]) / 2]],
 ]);
 
-export function Viewer({ mesh, resetToken, view, color }) {
+export function Viewer({ mesh, resetToken, view, color, plate }) {
   const ref = React.useRef(null);
   const orient = React.useRef({ rot: DEFAULT_ROT(), ortho: false });
   const pan = React.useRef([0, 0]);
   const redraw = React.useRef(() => {});
   const colorRef = React.useRef(null);
+  const plateRef = React.useRef(-1);
 
   React.useEffect(() => {
     if (!view) return;
@@ -176,6 +188,14 @@ export function Viewer({ mesh, resetToken, view, color }) {
     pan.current = [0, 0];
     redraw.current();
   }, [view]);
+
+  React.useEffect(() => {
+    const idx = Number.isInteger(plate) && mesh.plates && plate >= 0 && plate < mesh.plates.length ? plate : -1;
+    if (plateRef.current === idx) return;
+    plateRef.current = idx;
+    pan.current = [0, 0];
+    redraw.current();
+  }, [plate, mesh]);
 
   React.useEffect(() => {
     if (!color) return;
@@ -251,12 +271,13 @@ export function Viewer({ mesh, resetToken, view, color }) {
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       const aspect = w / hh;
       const proj = o.ortho ? orthographic(aspect, orthoHalfSize(zoom)) : perspective(aspect);
-      const scale = 1 / mesh.radius;
+      const active = (plateRef.current >= 0 && mesh.plates && mesh.plates[plateRef.current]) || mesh;
+      const scale = 1 / active.radius;
       const model = new Float32Array(rot);
       for (const idx of [0, 1, 2, 4, 5, 6, 8, 9, 10]) model[idx] *= scale;
-      model[12] = -(model[0] * mesh.center[0] + model[4] * mesh.center[1] + model[8] * mesh.center[2]) + pan.current[0];
-      model[13] = -(model[1] * mesh.center[0] + model[5] * mesh.center[1] + model[9] * mesh.center[2]) + pan.current[1];
-      model[14] = -(model[2] * mesh.center[0] + model[6] * mesh.center[1] + model[10] * mesh.center[2]) - zoom;
+      model[12] = -(model[0] * active.center[0] + model[4] * active.center[1] + model[8] * active.center[2]) + pan.current[0];
+      model[13] = -(model[1] * active.center[0] + model[5] * active.center[1] + model[9] * active.center[2]) + pan.current[1];
+      model[14] = -(model[2] * active.center[0] + model[6] * active.center[1] + model[10] * active.center[2]) - zoom;
       lastModel = model;
       gl.useProgram(program);
       const col = colorRef.current || DEFAULT_COLOR;
@@ -265,18 +286,19 @@ export function Viewer({ mesh, resetToken, view, color }) {
       gl.uniformMatrix4fv(gl.getUniformLocation(program, "model"), false, model);
       const mvp = mul(proj, model);
       gl.uniformMatrix4fv(gl.getUniformLocation(program, "mvp"), false, mvp);
-      gl.drawArrays(gl.TRIANGLES, 0, mesh.data.length / 6);
+      const ranges = active.ranges || [{ startTri: 0, triCount: mesh.data.length / 18 }];
+      for (const r of ranges) gl.drawArrays(gl.TRIANGLES, r.startTri * 3, r.triCount * 3);
 
       // Dimension labels: only in orthographic views, only for axes lying in
       // the screen plane (rotation column's view-z near zero).
       if (o.ortho) {
-        const m = mesh.radius * .18;
+        const m = active.radius * .18;
         const inPlane = {
           x: Math.abs(rot[2]) < .9,
           y: Math.abs(rot[6]) < .9,
           z: Math.abs(rot[10]) < .9,
         };
-        const anchors = DIM_ANCHORS(mesh.lo, mesh.hi, m);
+        const anchors = DIM_ANCHORS(active.lo, active.hi, m);
         for (const [axis, point] of anchors) {
           const el = labelEls[axis];
           if (!inPlane[axis]) { el.style.display = "none"; continue; }
@@ -284,7 +306,7 @@ export function Viewer({ mesh, resetToken, view, color }) {
           el.style.display = "";
           el.style.left = sx + "px";
           el.style.top = sy + "px";
-          el.textContent = mesh.size[axis === "x" ? 0 : axis === "y" ? 1 : 2].toFixed(2);
+          el.textContent = active.size[axis === "x" ? 0 : axis === "y" ? 1 : 2].toFixed(2);
         }
       } else {
         for (const el of Object.values(labelEls)) el.style.display = "none";

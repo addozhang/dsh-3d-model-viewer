@@ -50,6 +50,7 @@ export function Model3dBody({ content, resourceAddress, t }) {
   const [state, setState] = React.useState({ status: bytes ? "loading" : "waiting" });
   const [view, setView] = React.useState();
   const [color, setColor] = React.useState(DEFAULT_COLOR);
+  const [plate, setPlate] = React.useState(-1);
   React.useEffect(() => {
     if (!bytes) return;
     let live = true;
@@ -60,8 +61,8 @@ export function Model3dBody({ content, resourceAddress, t }) {
     return () => { live = false; };
   }, [bytes, is3mf]);
   return h("div", { className: "d3v-doc", "data-dsh-3d-docbody": "" },
-    state.status === "ready" && h(Viewer, { mesh: state.mesh, resetToken: 0, view, color }),
-    state.status === "ready" && h(ViewPresetBar, { onPick: (yaw, pitch, ortho) => setView({ yaw, pitch, ortho }), color, onPickColor: setColor }),
+    state.status === "ready" && h(Viewer, { mesh: state.mesh, resetToken: 0, view, color, plate }),
+    state.status === "ready" && h(ViewPresetBar, { onPick: (yaw, pitch, ortho) => setView({ yaw, pitch, ortho }), color, onPickColor: setColor, plates: state.mesh.plates, plate, onPickPlate: setPlate }),
     state.status === "loading" && h("div", { className: "d3v-doc-status" }, tt("loading")),
     state.status === "waiting" && h("div", { className: "d3v-doc-status" }, tt("waiting")),
     state.status === "error" && h("div", { className: "d3v-error" }, tt("failed", { message: state.message })),
@@ -89,6 +90,7 @@ function SessionDrawer({ sessionStore, viewRequest, completeViewRequest }) {
   const s = useStore(sessionStore);
   const [reset, setReset] = React.useState(0), [query, setQuery] = React.useState("");
   const [view, setView] = React.useState(), [color, setColor] = React.useState(DEFAULT_COLOR);
+  const [plate, setPlate] = React.useState(-1);
   const selected = s.files.find(x => x.path === s.selected) || s.files[0];
   const shown = s.files.filter(f => f.path.toLowerCase().includes(query.trim().toLowerCase()));
   const load = React.useCallback(async path => {
@@ -139,8 +141,8 @@ function SessionDrawer({ sessionStore, viewRequest, completeViewRequest }) {
       h("div", { className: "d3v-browser-foot" }, `${shown.length} / ${s.files.length} 个模型`)),
     h("section", { className: "d3v-preview-column" },
       h("div", { className: "d3v-stage" },
-        s.mesh && h(Viewer, { mesh: s.mesh, resetToken: reset, view, color }),
-        s.mesh && h(ViewPresetBar, { onPick: (yaw, pitch, ortho) => setView({ yaw, pitch, ortho }), color, onPickColor: setColor }),
+        s.mesh && h(Viewer, { mesh: s.mesh, resetToken: reset, view, color, plate }),
+        s.mesh && h(ViewPresetBar, { onPick: (yaw, pitch, ortho) => setView({ yaw, pitch, ortho }), color, onPickColor: setColor, plates: s.mesh.plates, plate, onPickPlate: setPlate }),
         s.loading && h("div", { className: "d3v-loading" }, "正在更新模型…"),
         s.error && h("div", { className: "d3v-error" }, s.error),
         s.mesh && h("div", { className: "d3v-help" }, "左键旋转 · 右键/Shift 平移 · 滚轮缩放 · 双击复位 · 文件变化自动更新")),

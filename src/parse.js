@@ -186,6 +186,89 @@ export function mat4Apply(m, x, y, z) {
 
 const P_NS = "http://schemas.microsoft.com/3dmanufacturing/production/2015/06";
 
+/**
+ * Group build-item triangle ranges into plates using the plate table from
+ * Bambu's Metadata/model_settings.config (plater_id + model_instance
+ * object_id). Pure: testable without a DOM.
+ *
+ * @param items - [{objectid, startTri, triCount}] in emission order.
+ * @param plateOfObject - Map objectid -> plateId (from the plate table).
+ * @param plateMeta - [{id, label}] in display order; optional.
+ * @param data - interleaved position/normal stream (6 floats per vertex).
+ * @returns plates array [{id, label, ranges, lo, hi, size, center, radius,
+ *   triangles}] or null when fewer than two plates.
+ */
+export function buildPlates(items, plateOfObject, plateMeta, data) {
+  if (!plateOfObject || plateOfObject.size === 0) return null;
+  const byPlate = new Map();
+  for (const it of items) {
+    const plate = plateOfObject.get(String(it.objectid));
+    if (plate === undefined) continue;
+    if (!byPlate.has(plate)) byPlate.set(plate, []);
+    byPlate.get(plate).push(it);
+  }
+  if (byPlate.size < 2) return null;
+  const metaById = new Map((plateMeta || []).map(m => [String(m.id), m]));
+  const ids = [...byPlate.keys()].sort((a, b) => Number(a) - Number(b));
+  const plates = [];
+  for (const id of ids) {
+    const ranges = byPlate.get(id).map(it => ({ startTri: it.startTri, triCount: it.triCount }));
+    let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity], triangles = 0;
+    for (const r of ranges) {
+      triangles += r.triCount;
+      for (let i = r.startTri * 18; i < (r.startTri + r.triCount) * 18; i += 6) {
+        for (let j = 0; j < 3; j++) {
+          const v = data[i + j];
+          if (v < lo[j]) lo[j] = v;
+          if (v > hi[j]) hi[j] = v;
+        }
+      }
+    }
+    if (!Number.isFinite(lo[0])) continue;
+    const size = lo.map((x, i) => hi[i] - x);
+    plates.push({
+      id,
+      label: (metaById.get(String(id)) || {}).label || `盘 ${id}`,
+      ranges,
+      triangles,
+      lo, hi, size,
+      center: lo.map((x, i) => (x + hi[i]) / 2),
+      radius: Math.hypot(...size) / 2 || 1,
+    });
+  }
+  return plates.length > 1 ? plates : null;
+}
+
+/** Read Bambu's plate table: objectid -> plateId plus ordered labels. */
+function readPlateTable(files) {
+  const entry = files.find(f => f.name.replace(/^\//, "") === "Metadata/model_settings.config");
+  if (!entry) return null;
+  try {
+    const doc = new DOMParser().parseFromString(new TextDecoder().decode(entry.data), "application/xml");
+    if (doc.querySelector("parsererror")) return null;
+    const plateOfObject = new Map();
+    const plateMeta = [];
+    for (const plate of doc.getElementsByTagName("plate")) {
+      let id = null, label = "";
+      for (const md of plate.getElementsByTagName("metadata")) {
+        if (md.getAttribute("key") === "plater_id") id = md.getAttribute("value");
+        if (md.getAttribute("key") === "plater_name" && md.getAttribute("value")) label = md.getAttribute("value");
+      }
+      if (id === null) continue;
+      plateMeta.push({ id, label });
+      for (const inst of plate.getElementsByTagName("model_instance")) {
+        for (const md of inst.getElementsByTagName("metadata")) {
+          if (md.getAttribute("key") === "object_id") {
+            const objectId = md.getAttribute("value");
+            if (!plateOfObject.has(objectId)) plateOfObject.set(objectId, id);
+          }
+        }
+      }
+    }
+    return plateOfObject.size ? { plateOfObject, plateMeta } : null;
+  } catch { return null; }
+}
+
 export async function parse3mf(buf) {
   const files = await unzip(buf);
   const models = files.filter(f => /\.model$/i.test(f.name));
@@ -277,17 +360,26 @@ export async function parse3mf(buf) {
     visiting.delete(key);
   };
 
-  const items = [...root.doc.getElementsByTagNameNS("*", "item")];
-  if (items.length) {
-    for (const item of items) {
+  const buildItems = [...root.doc.getElementsByTagNameNS("*", "item")];
+  const itemRanges = [];
+  if (buildItems.length) {
+    for (const item of buildItems) {
+      const start = triangles;
       emitObject(root, item.getAttribute("objectid"), mat4FromTransform(item.getAttribute("transform")), new Set());
+      if (triangles > start) itemRanges.push({ objectid: item.getAttribute("objectid"), startTri: start, triCount: triangles - start });
     }
   } else {
     // No build section: emit everything reachable from this file's objects.
     for (const id of root.objects.keys()) emitObject(root, id, MAT4_IDENTITY, new Set());
   }
   if (!triangles) throw Error("3MF 中没有可显示的三角网格");
-  const mesh = finishMesh(new Float32Array(vals), triangles);
+  const data = new Float32Array(vals);
+  const mesh = finishMesh(data, triangles);
   if (sawColor) mesh.colors = new Float32Array(cols);
+  const plateTable = readPlateTable(files);
+  if (plateTable) {
+    const plates = buildPlates(itemRanges, plateTable.plateOfObject, plateTable.plateMeta, data);
+    if (plates) mesh.plates = plates;
+  }
   return mesh;
 }

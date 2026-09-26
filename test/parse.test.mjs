@@ -151,3 +151,68 @@ test("3MF row-vector transform math", async () => {
   assert.throws(() => mat4FromTransform("1 2 3"));
   assert.throws(() => mat4FromTransform("a b c d e f g h i j k l"));
 });
+
+test("buildPlates groups item ranges with per-plate bounds", async () => {
+  const { buildPlates } = await import("../src/parse.js");
+  // 15 triangles: plate A (tris 0-9) near x=0, plate B (tris 10-14) near x=100
+  const data = new Float32Array(15 * 18);
+  for (let t = 0; t < 15; t++) {
+    const bx = t < 10 ? 0 : 100;
+    for (let v = 0; v < 3; v++) {
+      const o = t * 18 + v * 6;
+      data[o] = bx + v; data[o + 1] = v; data[o + 2] = 0;
+      data[o + 3] = 0; data[o + 4] = 1; data[o + 5] = 0; // dummy normal
+    }
+  }
+  const items = [
+    { objectid: "2", startTri: 0, triCount: 6 },
+    { objectid: "3", startTri: 6, triCount: 4 },
+    { objectid: "4", startTri: 10, triCount: 5 },
+  ];
+  const map = new Map([["2", "1"], ["3", "1"], ["4", "2"]]);
+  const meta = [{ id: "1", label: "左侧" }, { id: "2", label: "" }];
+  const plates = buildPlates(items, map, meta, data);
+  assert.ok(plates, "two plates detected");
+  assert.equal(plates.length, 2);
+  assert.deepEqual(plates.map(p => p.label), ["左侧", "盘 2"]);
+  assert.deepEqual(plates.map(p => p.triangles), [10, 5]);
+  assert.equal(plates[0].ranges.length, 2, "plate 1 has two ranges");
+  assert.ok(Math.abs(plates[0].center[0] - 1) < 1e-6, `plate1 center.x: ${plates[0].center[0]}`);
+  assert.ok(Math.abs(plates[1].center[0] - 101) < 1e-6, `plate2 center.x: ${plates[1].center[0]}`);
+  // radii are plate-local (fit-to-plate), so equal here despite the 100mm offset
+  assert.ok(Math.abs(plates[1].radius - plates[0].radius) < 1e-6, `radii: ${plates[0].radius} vs ${plates[1].radius}`);
+  // degenerate: single plate -> no switcher
+  assert.equal(buildPlates(items.slice(0, 2), map, meta, data), null);
+  // no plate table -> no switcher
+  assert.equal(buildPlates(items, new Map(), meta, data), null);
+});
+
+test("ViewPresetBar renders the plate switcher row", async () => {
+  const { setReact } = await import("../src/core.js");
+  const states = []; let calls = 0;
+  const R = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children: children.flat(3) }),
+    Fragment: "Fragment", useRef: v => ({ current: v }),
+    useState: v => { const i = calls++; if (states[i] === undefined) states[i] = v; return [states[i], () => {}]; },
+    useEffect: () => () => {}, useSyncExternalStore: (s, g) => g(), useCallback: f => f,
+  };
+  setReact(R);
+  const { ViewPresetBar } = await import("../src/viewer.js");
+  const plates = [
+    { id: "1", label: "盘 1", triangles: 10, ranges: [], lo: [0,0,0], hi: [1,1,1], size: [1,1,1], center: [.5,.5,.5], radius: 1 },
+    { id: "2", label: "盘 2", triangles: 5, ranges: [], lo: [0,0,0], hi: [1,1,1], size: [1,1,1], center: [.5,.5,.5], radius: 1 },
+  ];
+  const picked = [];
+  const bar = ViewPresetBar({ onPick: () => {}, color: [0,0,0], onPickColor: null, plates, plate: 1, onPickPlate: i => picked.push(i) });
+  const rows = bar.children.filter(c => c?.props?.className === "d3v-views");
+  assert.equal(rows.length, 2, "plate row + preset row");
+  const [plateRow, presetRow] = rows;
+  assert.deepEqual(plateRow.children.map(b => b.children[0]), ["全部", "盘 1", "盘 2"]);
+  assert.deepEqual(plateRow.children.map(b => b.props.className.includes("active")), [false, false, true]);
+  plateRow.children[0].props.onClick();
+  plateRow.children[2].props.onClick();  // 盘 2 is plates[1]
+  assert.deepEqual(picked, [-1, 1]);
+  // single plate -> no switcher row
+  const bar1 = ViewPresetBar({ onPick: () => {}, color: [0,0,0], onPickColor: null, plates: plates.slice(0, 1), plate: -1, onPickPlate: () => {} });
+  assert.equal(bar1.children.filter(c => c?.props?.className === "d3v-views").length, 1);
+});

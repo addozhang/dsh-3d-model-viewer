@@ -29,7 +29,7 @@ export const CSS = `
 .d3v-views{display:flex;gap:3px;background:rgba(129,138,150,.18);border-radius:8px;padding:4px;flex-wrap:wrap;max-width:calc(100% - 20px);justify-content:flex-end}
 @media(prefers-color-scheme:dark){.d3v-views{background:rgba(10,12,17,.65)}}
 .d3v-view-btn{appearance:none;border:0;background:transparent;color:#3f4854;border-radius:6px;padding:4px 8px;cursor:pointer;font:inherit;font-size:11px;line-height:1.2;white-space:nowrap}
-.d3v-view-btn:hover{background:rgba(96,165,250,.22);color:#173a63}
+.d3v-view-btn:hover{background:rgba(96,165,250,.22);color:#173a63}.d3v-view-btn.active{background:rgba(96,165,250,.4);color:#0f2a4d;font-weight:600}
 @media(prefers-color-scheme:dark){.d3v-view-btn{color:#c8d0dc}.d3v-view-btn:hover{color:#e8eef7}}
 .d3v-colors{display:flex;gap:5px;align-items:center;background:rgba(129,138,150,.18);border-radius:8px;padding:5px}
 @media(prefers-color-scheme:dark){.d3v-colors{background:rgba(10,12,17,.65)}}
