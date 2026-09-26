@@ -46,7 +46,7 @@ e2e 脚本依赖本机 python3 + playwright + Chrome，从 `~/.dsh/.credentials.
 
 ## 当前限制
 
-- 3MF 支持网格几何 + `basematerials` 颜色；build-item 变换、组件级覆盖与切片器私有元数据不还原
+- 3MF 支持网格几何、build-item / component 变换（多盘工程按真实盘位渲染全部盘）与 `basematerials` 部件颜色；切片器私有元数据忽略
 - 单文件限制 250 MB / 500 万三角面；超过 40 万三角面的网格拾取只用包围盒（按键式拖动模式下影响甚微）
 - 这是几何预览器：不做切片，不做可制造性分析
 

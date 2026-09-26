@@ -149,50 +149,142 @@ export function parseHexColor(value) {
   return [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
 }
 
+// ---- 3MF transforms (row-vector convention: v' = [x y z 1] · M) ----
+// Stored row-major as length-16 arrays; the 12-number attribute is
+// "m00 m01 m02 m10 m11 m12 m20 m21 m22 m30 m31 m32" with (m30..m32) the
+// translation, exactly the 3MF production-extension layout.
+export const MAT4_IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+/** 12-number transform attribute -> row-major 4x4, or MAT4_IDENTITY. */
+export function mat4FromTransform(text) {
+  if (typeof text !== "string") return MAT4_IDENTITY;
+  const parts = text.trim().split(/\s+/);
+  if (parts.length === 0 || (parts.length === 1 && parts[0] === "")) return MAT4_IDENTITY;
+  if (parts.length !== 12) throw Error(`3MF 变换需要 12 个数字，得到 ${parts.length}`);
+  const m = parts.map(Number);
+  for (const v of m) if (!Number.isFinite(v)) throw Error("3MF 变换包含非数字");
+  return [m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0, m[9], m[10], m[11], 1];
+}
+
+/** Standard 4x4 product; compose(child, parent) applies child first. */
+export function mat4Mul(child, parent) {
+  const out = new Array(16);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    out[r * 4 + c] = child[r * 4] * parent[c] + child[r * 4 + 1] * parent[4 + c] + child[r * 4 + 2] * parent[8 + c] + child[r * 4 + 3] * parent[12 + c];
+  }
+  return out;
+}
+
+/** Apply a row-major 4x4 to [x,y,z]. */
+export function mat4Apply(m, x, y, z) {
+  return [
+    x * m[0] + y * m[4] + z * m[8] + m[12],
+    x * m[1] + y * m[5] + z * m[9] + m[13],
+    x * m[2] + y * m[6] + z * m[10] + m[14],
+  ];
+}
+
+const P_NS = "http://schemas.microsoft.com/3dmanufacturing/production/2015/06";
+
 export async function parse3mf(buf) {
   const files = await unzip(buf);
   const models = files.filter(f => /\.model$/i.test(f.name));
   if (!models.length) throw Error("3MF 中没有 .model 网格");
-  const vals = [], cols = [];
-  let triangles = 0, sawColor = false;
+
+  // Parse every model file once: object registry, unit factor, materials.
+  const registry = new Map();
   for (const f of models) {
     const doc = new DOMParser().parseFromString(new TextDecoder().decode(f.data), "application/xml");
     if (doc.querySelector("parsererror")) continue;
     const factor = ({ micron: .001, millimeter: 1, centimeter: 10, inch: 25.4, foot: 304.8, meter: 1000 }[doc.documentElement.getAttribute("unit")] || 1);
-    // basematerials resources: id -> [hexColor strings]
     const materialMap = {};
     for (const bm of doc.getElementsByTagNameNS("*", "basematerials")) {
       materialMap[bm.getAttribute("id")] = [...bm.getElementsByTagNameNS("*", "base")]
         .map(base => parseHexColor(base.getAttribute("color")));
     }
-    const emit = (mesh, defaultColor, materialColors) => {
-      const verts = [...mesh.getElementsByTagNameNS("*", "vertex")].map(v => [+v.getAttribute("x") * factor, +v.getAttribute("y") * factor, +v.getAttribute("z") * factor]);
-      for (const t of mesh.getElementsByTagNameNS("*", "triangle")) {
-        const ids = [+t.getAttribute("v1"), +t.getAttribute("v2"), +t.getAttribute("v3")];
-        const a = verts[ids[0]], b = verts[ids[1]], c = verts[ids[2]];
-        if (!a || !b || !c) continue;
-        const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz) || 1;
-        for (const v of [a, b, c]) vals.push(v[0], v[1], v[2], nx / l, ny / l, nz / l);
-        let color = defaultColor;
-        const matid = t.getAttribute("matid");
-        if (materialColors && matid !== null && materialColors[+matid - 1]) color = materialColors[+matid - 1];
-        if (color) sawColor = true;
-        if (color) cols.push(color[0], color[1], color[2], color[0], color[1], color[2], color[0], color[1], color[2]);
-        else cols.push(0, 0, 0, 0, 0, 0, 0, 0, 0);
-        triangles++;
-        if (triangles > 5000000) throw Error("模型超过 500 万三角面限制");
-      }
-    };
-    // meshes grouped under objects (carrying pid/pindex material references)
-    const objects = [...doc.getElementsByTagNameNS("*", "object")];
-    for (const obj of objects) {
-      const materialColors = materialMap[obj.getAttribute("pid")] || null;
-      const objColor = materialColors ? materialColors[+(obj.getAttribute("pindex") || 0)] || null : null;
-      for (const mesh of obj.getElementsByTagNameNS("*", "mesh")) emit(mesh, objColor, materialColors);
+    const objects = new Map();
+    for (const obj of doc.getElementsByTagNameNS("*", "object")) {
+      if (obj.getAttribute("id") !== null) objects.set(obj.getAttribute("id"), obj);
     }
-    // bare meshes outside any object
-    if (!objects.length) for (const mesh of doc.getElementsByTagNameNS("*", "mesh")) emit(mesh, null, null);
+    registry.set(f.name.replace(/^\//, ""), { doc, factor, materialMap, objects, name: f.name.replace(/^\//, "") });
+  }
+
+  // Root model: the package relationship target, falling back to the conventional path.
+  let rootName = "3D/3dmodel.model";
+  const rels = files.find(f => f.name.replace(/^\//, "") === "_rels/.rels");
+  if (rels) {
+    try {
+      const relDoc = new DOMParser().parseFromString(new TextDecoder().decode(rels.data), "application/xml");
+      for (const rel of relDoc.getElementsByTagNameNS("*", "Relationship")) {
+        if ((rel.getAttribute("Type") || "").endsWith("/3dmodel")) {
+          rootName = (rel.getAttribute("Target") || "").replace(/^\//, "");
+          break;
+        }
+      }
+    } catch { /* keep conventional default */ }
+  }
+  const root = registry.get(rootName) || registry.get("3D/3dmodel.model");
+  if (!root) throw Error("3MF 中找不到根模型");
+
+  const vals = [], cols = [];
+  let triangles = 0, sawColor = false;
+
+  const emitMesh = (mesh, objEl, M, fileRec) => {
+    const materialColors = objEl ? fileRec.materialMap[objEl.getAttribute("pid")] || null : null;
+    const objColor = materialColors ? materialColors[+(objEl.getAttribute("pindex") || 0)] || null : null;
+    const verts = [...mesh.getElementsByTagNameNS("*", "vertex")].map(v => [+v.getAttribute("x") * fileRec.factor, +v.getAttribute("y") * fileRec.factor, +v.getAttribute("z") * fileRec.factor]);
+    for (const t of mesh.getElementsByTagNameNS("*", "triangle")) {
+      const ids = [+t.getAttribute("v1"), +t.getAttribute("v2"), +t.getAttribute("v3")];
+      const raw = [verts[ids[0]], verts[ids[1]], verts[ids[2]]];
+      if (!raw[0] || !raw[1] || !raw[2]) continue;
+      const pts = raw.map(p => M === MAT4_IDENTITY ? p : mat4Apply(M, p[0], p[1], p[2]));
+      const [a, b, c] = pts;
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz) || 1;
+      for (const p of pts) vals.push(p[0], p[1], p[2], nx / l, ny / l, nz / l);
+      let color = objColor;
+      const matid = t.getAttribute("matid");
+      if (materialColors && matid !== null && materialColors[+matid - 1]) color = materialColors[+matid - 1];
+      if (color) {
+        sawColor = true;
+        cols.push(color[0], color[1], color[2], color[0], color[1], color[2], color[0], color[1], color[2]);
+      } else {
+        cols.push(0, 0, 0, 0, 0, 0, 0, 0, 0);
+      }
+      triangles++;
+      if (triangles > 5000000) throw Error("模型超过 500 万三角面限制");
+    }
+  };
+
+  // Walk build items -> objects -> components recursively, composing the
+  // row-vector transforms so multi-plate projects land at their true positions.
+  const emitObject = (fileRec, objId, M, visiting) => {
+    const obj = fileRec.objects.get(objId);
+    if (!obj) return;
+    const key = fileRec.name + "#" + objId;
+    if (visiting.has(key)) return;
+    visiting.add(key);
+    const mesh = obj.getElementsByTagNameNS("*", "mesh")[0] || null;
+    if (mesh) emitMesh(mesh, obj, M, fileRec);
+    for (const comp of obj.getElementsByTagNameNS("*", "component")) {
+      const path = comp.getAttributeNS(P_NS, "path");
+      const childRec = path ? registry.get(path.replace(/^\//, "")) : fileRec;
+      if (!childRec) continue;
+      const cm = mat4FromTransform(comp.getAttribute("transform"));
+      const combined = (M === MAT4_IDENTITY && cm === MAT4_IDENTITY) ? MAT4_IDENTITY : mat4Mul(cm, M);
+      emitObject(childRec, comp.getAttribute("objectid"), combined, visiting);
+    }
+    visiting.delete(key);
+  };
+
+  const items = [...root.doc.getElementsByTagNameNS("*", "item")];
+  if (items.length) {
+    for (const item of items) {
+      emitObject(root, item.getAttribute("objectid"), mat4FromTransform(item.getAttribute("transform")), new Set());
+    }
+  } else {
+    // No build section: emit everything reachable from this file's objects.
+    for (const id of root.objects.keys()) emitObject(root, id, MAT4_IDENTITY, new Set());
   }
   if (!triangles) throw Error("3MF 中没有可显示的三角网格");
   const mesh = finishMesh(new Float32Array(vals), triangles);

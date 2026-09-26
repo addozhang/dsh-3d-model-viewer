@@ -120,3 +120,34 @@ test("ASCII STL is not misread as binary (offset-80 facet-count trap)", () => {
   assert.ok(Math.abs(mesh.volume / 1000 - 0.24) < 0.001, `volume: ${mesh.volume}`);
   assert.deepEqual(mesh.size.map(v => +v.toFixed(2)), [4, 10, 6]);
 });
+
+test("3MF row-vector transform math", async () => {
+  const { mat4FromTransform, mat4Mul, mat4Apply, MAT4_IDENTITY } = await import("../src/parse.js");
+  // identity / absent
+  assert.equal(mat4FromTransform(null), MAT4_IDENTITY);
+  assert.deepEqual(mat4FromTransform("1 0 0 0 1 0 0 0 1 0 0 0"), MAT4_IDENTITY);
+  // translation only
+  const t = mat4FromTransform("1 0 0 0 1 0 0 0 1 10 20 30");
+  assert.deepEqual(mat4Apply(t, 0, 0, 0), [10, 20, 30]);
+  assert.deepEqual(mat4Apply(t, 1, 2, 3), [11, 22, 33]);
+  // the 90°-about-Y rotation + translation seen in real multi-plate files
+  const r = mat4FromTransform("2.22044605e-16 0 -1 0 1 0 1 0 2.22044605e-16 128.849129 128 0");
+  const [x, y, z] = mat4Apply(r, 1, 0, 0);
+  assert.ok(Math.abs(x - 128.849129) < 1e-6, `x: ${x}`);
+  assert.ok(Math.abs(y - 128) < 1e-6, `y: ${y}`);
+  assert.ok(Math.abs(z + 1) < 1e-6, `z: ${z}`);
+  // compose: child translation then parent translation = summed
+  const child = mat4FromTransform("1 0 0 0 1 0 0 0 1 1 2 3");
+  const parent = mat4FromTransform("1 0 0 0 1 0 0 0 1 10 20 30");
+  assert.deepEqual(mat4Apply(mat4Mul(child, parent), 0, 0, 0), [11, 22, 33]);
+  // rotation composes with r's own translation:
+  // (0,0,1) --r--> (129.849, 128, ~0) --pure 90°-Y--> (~0, 128, -129.849)
+  const r2 = mat4Mul(r, mat4FromTransform("2.22044605e-16 0 -1 0 1 0 1 0 2.22044605e-16 0 0 0"));
+  const [px, py, pz] = mat4Apply(r2, 0, 0, 1);
+  assert.ok(Math.abs(px) < 1e-9, `px: ${px}`);
+  assert.ok(Math.abs(py - 128) < 1e-6, `py: ${py}`);
+  assert.ok(Math.abs(pz + 129.849129) < 1e-6, `pz: ${pz}`);
+  // malformed input throws
+  assert.throws(() => mat4FromTransform("1 2 3"));
+  assert.throws(() => mat4FromTransform("a b c d e f g h i j k l"));
+});

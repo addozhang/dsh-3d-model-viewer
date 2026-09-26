@@ -74,9 +74,9 @@ cookie for its private server instance. Env knobs: `E2E_WORKSPACE`,
 
 ## Current limitations
 
-- 3MF support covers mesh geometry + `basematerials` colors; build-item
-  transforms, per-component overrides, and slicer-specific metadata are not
-  reconstructed.
+- 3MF support covers mesh geometry, build-item and component transforms
+  (multi-plate projects render every plate at its true position), and
+  `basematerials` part colors; slicer-specific metadata is ignored.
 - Files are capped at 250 MB / 5 M triangles; meshes above 400 k triangles
   fall back to bounding-box-only picking (moot with button-based drag modes).
 - This is a geometry previewer: no slicing, no printability analysis.
