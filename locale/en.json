@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "3D Model Viewer",
+    "description": "Interactive STL/3MF preview for the DeepSeek Harness Web GUI: sidebar document tabs, a live session drawer, CAD navigation, orthographic dimension labels, 3MF part colors, and multi-plate switching — all parsed locally.",
+    "detail": "docs/plugin-detail.en.md"
+  }
+}

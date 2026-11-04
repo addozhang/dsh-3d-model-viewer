@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "3D 模型查看器",
+    "description": "STL/3MF 交互式预览：侧边栏文档标签直接打开模型，会话实时抽屉、CAD 式导航、正交尺寸标签、3MF 部件颜色与多盘切换——解析全程本地完成。",
+    "detail": "docs/plugin-detail.zh.md"
+  }
+}
